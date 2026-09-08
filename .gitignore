@@ -1,0 +1,52 @@
+# Binaries
+/homelabctl
+/homelabctld
+/bin/
+/dist/
+cmd/homelabctl/homelabctl
+cmd/homelabctld/homelabctld
+
+# Cross-compiled build artifacts
+*.exe
+*.exe~
+*_linux_arm64
+*_linux_arm
+
+# Go build/test artifacts
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Local config overrides (keep the example, ignore real configs)
+config.yaml
+*.local.yaml
+!deploy/config/config.example.yaml
+
+# SSH keys / secrets (never commit these)
+deploy/config/keys/
+*.pem
+*.key
+known_hosts
+
+# Logs
+*.log
+/log/
+
+# Env files
+.env
+.env.local
+
+# OS/editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Go workspace files (if using go.work locally)
+go.work
+go.work.sum
+
+# Vendor (omit this section if you decide to vendor deps)
+/vendor/
