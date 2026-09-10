@@ -5,9 +5,8 @@
 # Global SSH defaults (per-node overrides below)
 # ─────────────────────────────────────────────
 ssh:
-  user: homelabctl
-  identity_file: /etc/homelabctl/keys/id_ed25519
-  password: <some-password>
+  user: root
+  identity_file: /home/pspiagicw/.development/.ssh/falcon
   port: 22
   connection_timeout: 10
   strict_host_key_checking: true
@@ -20,15 +19,15 @@ sentinel:
   host: falcon-lite
   address: 172.20.1.46
   check_interval: 5          # how often we ping falcon-lite
-  outage_grace_period: 90    # 15 min of no response before declaring outage
-  restore_grace_period: 90   # 15 min of falcon-lite being back before WoL'ing nodes
+  outage_grace_period: 10    # 15 min of no response before declaring outage
+  restore_grace_period: 10   # 15 min of falcon-lite being back before WoL'ing nodes
 
 # ─────────────────────────────────────────────
 # Managed nodes (all on inverter/battery backup)
 # ─────────────────────────────────────────────
 nodes:
   falcon-heavy:
-    address: 192.168.1.12
+    address: 172.20.1.45
     mac: "b8:27:eb:00:00:02"
     wait_after_boot: 180        # static delay before considered "ready"
     services:
@@ -37,7 +36,7 @@ nodes:
       - truenas
 
   falcon1:
-    address: 192.168.1.13
+    address: 172.20.1.44
     mac: "b8:27:eb:00:00:03"
     wait_after_boot: 60
     services:
@@ -45,7 +44,7 @@ nodes:
       - borg-target
 
   falcon2:
-    address: 192.168.1.14
+    address: 172.20.1.43
     mac: "b8:27:eb:00:00:04"
     wait_after_boot: 45
     services:

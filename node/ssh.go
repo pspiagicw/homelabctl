@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
+	"os"
 
 	"github.com/pspiagicw/homelabctl/config"
 	"golang.org/x/crypto/ssh"
@@ -12,20 +14,39 @@ import (
 // TODO: Implement SSH key authentication.
 // TODO: Implement host key implementation
 func NewSSHClient(cfg config.SSHConfig, host string) (*ssh.Client, error) {
+	authMethod, err := publicKeyAuth(cfg.IdentityFile)
+	if err != nil {
+		return nil, fmt.Errorf("error loading identity file: %v", err)
+	}
+
 	config := &ssh.ClientConfig{
 		User: cfg.User,
 		Auth: []ssh.AuthMethod{
-			ssh.Password(cfg.Password),
+			authMethod,
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
 
-	client, err := ssh.Dial("tcp", host, config)
+	client, err := ssh.Dial("tcp", host+":22", config)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing ssh connection: %v", err)
 	}
 
 	return client, nil
+}
+func publicKeyAuth(path string) (ssh.AuthMethod, error) {
+	keyBytes, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("error reading identity file: %v", err)
+	}
+
+	signer, err := ssh.ParsePrivateKey(keyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing private key: %v", err)
+	}
+
+	return ssh.PublicKeys(signer), nil
+
 }
 
 func (n *Node) RunCommand(ctx context.Context, cmd string) (stdout, stderr string, err error) {
@@ -46,6 +67,7 @@ func (n *Node) RunCommand(ctx context.Context, cmd string) (stdout, stderr strin
 	var e bytes.Buffer
 	session.Stdout = &b
 	session.Stderr = &e
+	slog.Info("SSH Connection established!")
 
 	if err := session.Run(cmd); err != nil {
 		return "", "", fmt.Errorf("failed to run cmd: %v", err)
@@ -55,6 +77,10 @@ func (n *Node) RunCommand(ctx context.Context, cmd string) (stdout, stderr strin
 }
 
 func (n *Node) Shutdown(ctx context.Context) error {
+	if n.State == OFF {
+		// Skip if the host is already off.
+		return nil
+	}
 	_, _, err := n.RunCommand(ctx, "shutdown now")
 	if err != nil {
 		return fmt.Errorf("failed to shutdown node: %v", err)
