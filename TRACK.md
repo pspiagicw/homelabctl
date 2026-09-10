@@ -6,8 +6,8 @@ Granular, code-level breakdown of everything needed to build `homelabctl` from s
 
 ## Phase 0 — Project Scaffolding
 
-- [ ] Init Go module: `go mod init github.com/<you>/homelabctl`
-- [ ] Create directory skeleton:
+- [x] Init Go module: `go mod init github.com/<you>/homelabctl`
+- [x] Create directory skeleton:
   ```
   cmd/homelabctl/        # CLI entrypoint (main.go)
   cmd/homelabctld/        # daemon entrypoint (main.go)
@@ -26,7 +26,7 @@ Granular, code-level breakdown of everything needed to build `homelabctl` from s
   deploy/config/               # example config.yaml
   test/integration/            # integration tests
   ```
-- [ ] Add `.gitignore` (binaries, `*.log`, local config overrides)
+- [x] Add `.gitignore` (binaries, `*.log`, local config overrides)
 - [ ] Pick and vendor core deps:
   - [ ] `gopkg.in/yaml.v3` — config parsing
   - [ ] `github.com/spf13/cobra` — CLI framework
@@ -44,19 +44,22 @@ Granular, code-level breakdown of everything needed to build `homelabctl` from s
 ## Phase 1 — Config Layer
 
 ### 1.1 Struct definitions (`internal/config/types.go`)
-- [ ] `type SSHConfig struct` — User, IdentityFile, Port, ConnectTimeout, StrictHostKeyChecking, KnownHostsFile
-- [ ] `type SentinelConfig struct` — Host, Address, CheckMethod, CheckInterval, OutageGracePeriod, RestoreGracePeriod
-- [ ] `type NodeConfig struct` — Address, MAC, AlwaysOn, WaitAfterBoot, Services []string, SSH *SSHConfig (nil = inherit global)
-- [ ] `type ProfileConfig struct` — Nodes []string (ordered)
-- [ ] `type ScheduleEntry struct` — Time string, Profile string
-- [ ] `type ScheduleConfig struct` — Timezone string, Entries []ScheduleEntry
+- [x] `type SSHConfig struct` — User, IdentityFile, Port, ConnectTimeout, StrictHostKeyChecking, KnownHostsFile
+- [x] `type SentinelConfig struct` — Host, Address, CheckMethod, CheckInterval, OutageGracePeriod, RestoreGracePeriod
+- [x] `type NodeConfig struct` — Address, MAC, AlwaysOn, WaitAfterBoot, Services []string, SSH *SSHConfig (nil = inherit global)
+- [x] `type ProfileConfig struct` — Nodes []string (ordered)
+- [x] `type ScheduleEntry struct` — Time string, Profile string
+- [x] `type ScheduleConfig struct` — Timezone string, Entries []ScheduleEntry
 - [ ] `type OverridesConfig struct` — DefaultDuration time.Duration
-- [ ] `type Config struct` — top-level: SSH, Sentinel, Nodes map[string]NodeConfig, Profiles map[string]ProfileConfig, Schedule, Overrides
+- [x] `type Config struct` — top-level: SSH, Sentinel, Nodes map[string]NodeConfig, Profiles map[string]ProfileConfig, Schedule, Overrides
 - [ ] Custom `UnmarshalYAML` for duration fields (`900s`, `1h`) → `time.Duration`
 - [ ] Custom `UnmarshalYAML` for `ScheduleEntry.Time` → validate `HH:MM` 24h format
 
 ### 1.2 Loading (`internal/config/load.go`)
-- [ ] `func Load(path string) (*Config, error)` — reads file, unmarshal YAML
+- [x] `func Load(path string) (*Config, error)` — reads file, unmarshal YAML
+
+These 2 functions are part of command parsing, not loading. Loading should only take care of only loading.
+
 - [ ] Support `--config` flag override + default path resolution (`/etc/homelabctl/config.yaml`, then `./config.yaml`)
 - [ ] Env var override support (e.g. `HOMELABCTL_CONFIG`)
 
@@ -89,12 +92,12 @@ Granular, code-level breakdown of everything needed to build `homelabctl` from s
 ## Phase 2 — Node Primitives
 
 ### 2.1 Node model (`internal/node/node.go`)
-- [ ] `type Node struct` — wraps `config.NodeConfig` + runtime state (Name, LastSeen, PowerState enum: Unknown/Off/Booting/On/Unreachable)
-- [ ] `type PowerState int` + `String()` method
-- [ ] `func NewNode(name string, cfg config.NodeConfig, sshDefaults config.SSHConfig) *Node`
+- [x] `type Node struct` — wraps `config.NodeConfig` + runtime state (Name, LastSeen, PowerState enum: Unknown/Off/Booting/On/Unreachable)
+- [x] `type PowerState int` + `String()` method
+- [x] `func NewNode(name string, cfg config.NodeConfig, sshDefaults config.SSHConfig) *Node`
 
 ### 2.2 Wake-on-LAN (`internal/node/wol.go`)
-- [ ] `func SendMagicPacket(mac string, broadcastAddr string) error`
+- [x] `func SendMagicPacket(mac string, broadcastAddr string) error`
 - [ ] Construct magic packet byte sequence (6x 0xFF + 16x MAC repeat) if not using a library
 - [ ] Unit test: verify packet byte structure for a known MAC
 - [ ] `func (n *Node) Boot(ctx context.Context) error` — sends WoL, logs event
