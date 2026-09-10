@@ -18,10 +18,10 @@ ssh:
 # ─────────────────────────────────────────────
 sentinel:
   host: falcon-lite
-  address: 192.168.1.10
-  check_interval: 30          # how often we ping falcon-lite
-  outage_grace_period: 900    # 15 min of no response before declaring outage
-  restore_grace_period: 900   # 15 min of falcon-lite being back before WoL'ing nodes
+  address: 172.20.1.46
+  check_interval: 5          # how often we ping falcon-lite
+  outage_grace_period: 90    # 15 min of no response before declaring outage
+  restore_grace_period: 90   # 15 min of falcon-lite being back before WoL'ing nodes
 
 # ─────────────────────────────────────────────
 # Managed nodes (all on inverter/battery backup)

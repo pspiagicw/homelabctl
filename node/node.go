@@ -39,3 +39,7 @@ func NewNode(name string, cfg config.NodeConfig, ssh config.SSHConfig) *Node {
 
 	return n
 }
+
+// TODO: Initialize the node, check if it's online etc.
+func (n *Node) Init() {
+}
