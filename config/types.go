@@ -30,7 +30,7 @@ type SentinelConfig struct {
 	Address            string `yaml:"address"`
 	CheckInterval      int    `yaml:"check_interval"`
 	OutageGracePeriod  int    `yaml:"outage_grace_period"`
-	RestoreGracePeriod int    `yaml:"restore_grace_perioud"`
+	RestoreGracePeriod int    `yaml:"restore_grace_period"`
 }
 
 // nodes:
