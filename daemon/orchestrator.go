@@ -30,6 +30,16 @@ func (o *Orchestrator) Init() {
 	o.Sentinel.Init()
 }
 
+func (o *Orchestrator) PowerOff(ctx context.Context) {
+	for name, node := range o.Registry.Nodes {
+		slog.Info("Powering off", "node", name)
+		err := node.Shutdown(ctx)
+		if err != nil {
+			slog.Error("Error shutting down system", "error", err)
+		}
+	}
+}
+
 func (o *Orchestrator) Start(ctx context.Context) {
 	o.Init()
 
@@ -37,7 +47,7 @@ func (o *Orchestrator) Start(ctx context.Context) {
 	wg.Add(1)
 	go func() {
 		o.Sentinel.Run(ctx, func(c context.Context) {
-			slog.Info("Outage function triggered!")
+			o.PowerOff(ctx)
 		},
 			func(c context.Context) {
 				slog.Info("Restore function triggered!")
