@@ -1,6 +1,11 @@
 package node
 
-import "github.com/pspiagicw/homelabctl/config"
+import (
+	"log/slog"
+
+	"github.com/pspiagicw/homelabctl/config"
+	"github.com/pspiagicw/homelabctl/utils"
+)
 
 // falcon-heavy:
 //   address: 192.168.1.12
@@ -42,4 +47,19 @@ func NewNode(name string, cfg config.NodeConfig, ssh config.SSHConfig) *Node {
 
 // TODO: Initialize the node, check if it's online etc.
 func (n *Node) Init() {
+	n.IsReachable()
+}
+
+func (n *Node) IsReachable() {
+	status, err := utils.Ping(n.cfg.Address)
+	if err != nil {
+		slog.Error("error pinging host for health check.", "error", err)
+	}
+	slog.Info("Health check done for host", "node", n.Name, "status", status)
+
+	if status {
+		n.State = ON
+	} else {
+		n.State = OFF
+	}
 }
