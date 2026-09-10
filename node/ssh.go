@@ -77,14 +77,40 @@ func (n *Node) RunCommand(ctx context.Context, cmd string) (stdout, stderr strin
 }
 
 func (n *Node) Shutdown(ctx context.Context) error {
+	// Skip if the host is already off.
 	if n.State == OFF {
-		// Skip if the host is already off.
+		slog.Info("Node is already down, no need for shutdown", "node", n.Name)
 		return nil
 	}
-	_, _, err := n.RunCommand(ctx, "shutdown now")
+
+	// Don't do anything if we don't know if the host is up.
+	if n.State != ON {
+		return nil
+	}
+
+	// Shutdown in 60 secs.
+	stdout, stderr, err := n.RunCommand(ctx, "shutdown")
 	if err != nil {
 		return fmt.Errorf("failed to shutdown node: %v", err)
 	}
+	slog.Info("Command ran successfully, assuming node to be shut down.")
+	// The shutdown command outputs on stderr, not stdout
+	slog.Info("Shutdown command output", "output", stderr)
+
+	// If no error was returned, assume it will shutdown
+	if stderr == "" && stdout == "" {
+		n.State = OFF
+
+	}
+
+	// TODO: Implement shutdown wait procedures if you want.
+	// for {
+	// 	n.IsReachable()
+	// 	if n.State == OFF {
+	// 		break
+	// 	}
+	// }
+	// Wait for it to shutdown!
 
 	return nil
 }
