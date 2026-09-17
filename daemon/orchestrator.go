@@ -49,11 +49,40 @@ func NewOrchestrator(cfg *config.Config) *Orchestrator {
 		func(ctx context.Context, name string) []byte {
 			return utils.ToJSON(o.Shutdown(ctx, name))
 		},
+		func(ctx context.Context) []byte {
+			return utils.ToJSON(o.RegistryStatus(ctx))
+		},
+		func(ctx context.Context, name string) []byte {
+			return utils.ToJSON(o.NodeStatus(ctx, name))
+		},
 	)
 
 	return o
 }
 
+func (o *Orchestrator) NodeStatus(ctx context.Context, name string) any {
+	n, err := o.Registry.NodeStatus(ctx, name)
+
+	message := ""
+	if err != nil {
+		message = err.Error()
+	}
+	return struct {
+		Status  bool                 `json:"status"`
+		Message string               `json:"message"`
+		Node    *node.DetailedStatus `json:"node"`
+	}{
+		err == nil,
+		message,
+		n,
+	}
+}
+
+func (o *Orchestrator) RegistryStatus(ctx context.Context) *node.RegistryStatus {
+	r := o.Registry.Status()
+
+	return r
+}
 func (o *Orchestrator) Status(ctx context.Context) *DaemonStatus {
 	s := o.Sentinel.Status()
 	r := o.Registry.Status()
@@ -89,24 +118,38 @@ func (o *Orchestrator) ShutdownAll(ctx context.Context) {
 }
 
 func (o *Orchestrator) Shutdown(ctx context.Context, name string) any {
-	status := o.Registry.Shutdown(ctx, name)
+	err := o.Registry.Shutdown(ctx, name)
+
+	message := ""
+	if err != nil {
+		message = err.Error()
+	}
 
 	return struct {
-		Status bool `json:"status"`
+		Status  bool   `json:"status"`
+		Message string `json:"message"`
 	}{
-		status,
+		err == nil,
+		message,
 	}
 
 }
 
 // TODO: Check if we need to send only true/false or node info too!
 func (o *Orchestrator) Boot(ctx context.Context, name string) any {
-	status := o.Registry.Boot(ctx, name)
+	err := o.Registry.Boot(ctx, name)
+
+	message := ""
+	if err != nil {
+		message = err.Error()
+	}
 
 	return struct {
-		Status bool `json:"status"`
+		Status  bool   `json:"status"`
+		Message string `json:"message"`
 	}{
-		status,
+		err == nil,
+		message,
 	}
 }
 
