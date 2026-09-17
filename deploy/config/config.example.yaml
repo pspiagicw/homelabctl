@@ -18,9 +18,9 @@ ssh:
 sentinel:
   host: falcon-lite
   address: 172.20.1.46
-  check_interval: 5          # how often we ping falcon-lite
-  outage_grace_period: 10    # 15 min of no response before declaring outage
-  restore_grace_period: 10   # 15 min of falcon-lite being back before WoL'ing nodes
+  check_interval: 30          # how often we ping falcon-lite
+  outage_grace_period: 900    # 15 min of no response before declaring outage
+  restore_grace_period: 900   # 15 min of falcon-lite being back before WoL'ing nodes
 
 # ─────────────────────────────────────────────
 # Managed nodes (all on inverter/battery backup)
@@ -28,24 +28,24 @@ sentinel:
 nodes:
   falcon-heavy:
     address: 172.20.1.45
-    mac: "b8:27:eb:00:00:02"
+    mac: "fc:9d:05:25:5f:13"
     wait_after_boot: 180        # static delay before considered "ready"
     services:
       - jellyfin
       - immich
       - truenas
 
-  falcon1:
-    address: 172.20.1.44
-    mac: "b8:27:eb:00:00:03"
+  falcon2:
+    address: 172.20.1.43
+    mac: "6C:4B:90:59:62:0C"
     wait_after_boot: 60
     services:
       - proxmox-backup-server
       - borg-target
 
-  falcon2:
-    address: 172.20.1.43
-    mac: "b8:27:eb:00:00:04"
+  falcon1:
+    address: 172.20.1.44
+    mac: "00:23:24:C4:27:7C"
     wait_after_boot: 45
     services:
       - transmission

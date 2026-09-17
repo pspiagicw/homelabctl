@@ -12,7 +12,7 @@ func (s *Sentinel) SetState(state SentinelState) {
 	s.GraceDownTime = 0
 	s.GraceUpTime = 0
 }
-func (s *Sentinel) Run(ctx context.Context, onOutage, onRestore func(context.Context)) {
+func (s *Sentinel) Run(ctx context.Context) {
 	ticker := time.NewTicker(time.Duration(s.cfg.CheckInterval) * time.Second)
 	slog.Info("sentinel started!")
 	slog.Info("sentinel info", "addresss", s.cfg.Address, "status", s.State)
@@ -49,7 +49,7 @@ func (s *Sentinel) Run(ctx context.Context, onOutage, onRestore func(context.Con
 			case OutageConfirmed:
 				slog.Warn("outage confirmed. starting shutdown sequence!")
 				// TODO: Check if we need to run this in a goroutine.
-				onOutage(ctx)
+				s.OnOutage(ctx)
 				if pingStatus {
 					slog.Warn("successfull ping, assuming sentinel online")
 					s.SetState(Restoring)
@@ -70,7 +70,7 @@ func (s *Sentinel) Run(ctx context.Context, onOutage, onRestore func(context.Con
 			case Restored:
 				slog.Warn("outage restored, starting restore sequence!")
 				s.SetState(Normal)
-				onRestore(ctx)
+				s.OnRestore(ctx)
 				break
 			}
 		}
