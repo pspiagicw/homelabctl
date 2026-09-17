@@ -15,8 +15,9 @@ type Server struct {
 
 	router chi.Router
 
-	StatusFunc func(context.Context) []byte
-	BootFunc   func(context.Context, string) []byte
+	StatusFunc   func(context.Context) []byte
+	BootFunc     func(context.Context, string) []byte
+	ShutdownFunc func(context.Context, string) []byte
 }
 
 func NewServer(config *config.Config) *Server {
@@ -27,9 +28,10 @@ func NewServer(config *config.Config) *Server {
 	return s
 }
 
-func (s *Server) SetFunc(statusFunc func(context.Context) []byte, bootFunc func(context.Context, string) []byte) {
+func (s *Server) SetFunc(statusFunc func(context.Context) []byte, bootFunc func(context.Context, string) []byte, shutdownFunc func(context.Context, string) []byte) {
 	s.StatusFunc = statusFunc
 	s.BootFunc = bootFunc
+	s.ShutdownFunc = shutdownFunc
 }
 
 func (s *Server) Init() {
@@ -44,7 +46,7 @@ func (s *Server) Init() {
 		// 	r.Get("/", s.handleListNodes)
 		// 	r.Get("/name", s.handleGetNode)
 		r.Post("/{name}/boot", s.handleBoot)
-		// 	r.Post("/{name}/shutdown", s.handleShutdown)
+		r.Post("/{name}/shutdown", s.handleShutdown)
 	})
 
 	slog.Info("server initialized!")
@@ -76,6 +78,18 @@ func (s *Server) handleBoot(w http.ResponseWriter, r *http.Request) {
 	slog.Info("boot request", "node", name)
 
 	response := s.BootFunc(r.Context(), name)
+
+	w.Write(response)
+}
+
+func (s *Server) handleShutdown(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	name := chi.URLParam(r, "name")
+	slog.Info("shutdown request", "node", name)
+
+	response := s.ShutdownFunc(r.Context(), name)
 
 	w.Write(response)
 }

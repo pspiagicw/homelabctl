@@ -2,7 +2,6 @@ package daemon
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"sync"
 
@@ -10,6 +9,7 @@ import (
 	"github.com/pspiagicw/homelabctl/config"
 	"github.com/pspiagicw/homelabctl/node"
 	"github.com/pspiagicw/homelabctl/sentinel"
+	"github.com/pspiagicw/homelabctl/utils"
 )
 
 type Orchestrator struct {
@@ -32,7 +32,7 @@ func NewOrchestrator(cfg *config.Config) *Orchestrator {
 
 	o.Sentinel.SetFunc(
 		func(ctx context.Context) {
-			o.PowerOff(ctx)
+			o.ShutdownAll(ctx)
 		},
 		func(context.Context) {
 			slog.Info("Restore function triggered!")
@@ -40,25 +40,21 @@ func NewOrchestrator(cfg *config.Config) *Orchestrator {
 	)
 
 	o.Server.SetFunc(
-		func(context.Context) []byte {
-			status := o.Status()
-			content, err := json.Marshal(status)
-			if err != nil {
-				slog.Info("error encoding daemon-status to json", "error", err)
-			}
-
-			return content
+		func(ctx context.Context) []byte {
+			return utils.ToJSON(o.Status(ctx))
 		},
 		func(ctx context.Context, name string) []byte {
-			o.Boot(ctx, name)
-			return []byte{}
+			return utils.ToJSON(o.Boot(ctx, name))
+		},
+		func(ctx context.Context, name string) []byte {
+			return utils.ToJSON(o.Shutdown(ctx, name))
 		},
 	)
 
 	return o
 }
 
-func (o *Orchestrator) Status() *DaemonStatus {
+func (o *Orchestrator) Status(ctx context.Context) *DaemonStatus {
 	s := o.Sentinel.Status()
 	r := o.Registry.Status()
 	d := &DaemonStatus{
@@ -88,25 +84,30 @@ func (o *Orchestrator) Init() {
 	slog.Info("initialization completed!")
 }
 
-func (o *Orchestrator) PowerOff(ctx context.Context) {
-	slog.Info("starting shutdown sequence")
-	for name, node := range o.Registry.Nodes {
-		slog.Info("shutdown requested", "node", name)
-		node.Shutdown(ctx)
-	}
+func (o *Orchestrator) ShutdownAll(ctx context.Context) {
+	o.Registry.ShutdownAll(ctx)
 }
 
-func (o *Orchestrator) Boot(ctx context.Context, bootName string) error {
+func (o *Orchestrator) Shutdown(ctx context.Context, name string) any {
+	status := o.Registry.Shutdown(ctx, name)
 
-	// TODO: Move this to registry
-	for name, node := range o.Registry.Nodes {
-		if name == bootName {
-			slog.Info("sending boot command", "node", name)
-			node.Boot(ctx)
-		}
+	return struct {
+		Status bool `json:"status"`
+	}{
+		status,
 	}
 
-	return nil
+}
+
+// TODO: Check if we need to send only true/false or node info too!
+func (o *Orchestrator) Boot(ctx context.Context, name string) any {
+	status := o.Registry.Boot(ctx, name)
+
+	return struct {
+		Status bool `json:"status"`
+	}{
+		status,
+	}
 }
 
 func (o *Orchestrator) Start(ctx context.Context) {

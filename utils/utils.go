@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/json"
 	"log/slog"
 	"time"
 
@@ -25,4 +26,13 @@ func Ping(address string) bool {
 	stats := pinger.Statistics()
 
 	return stats.PacketsRecv > 0
+}
+
+func ToJSON(data any) []byte {
+	content, err := json.Marshal(data)
+	if err != nil {
+		slog.Info("error encoding data to json", "error", err)
+	}
+
+	return content
 }

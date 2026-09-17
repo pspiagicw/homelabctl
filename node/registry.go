@@ -1,6 +1,7 @@
 package node
 
 import (
+	"context"
 	"log/slog"
 	"sync"
 
@@ -52,4 +53,32 @@ func (r *Registry) Status() *RegistryStatus {
 	}
 
 	return status
+}
+
+func (r *Registry) ShutdownAll(ctx context.Context) {
+	slog.Info("starting shutdown sequence")
+	for name, node := range r.Nodes {
+		slog.Info("shutdown requested", "node", name)
+		node.Shutdown(ctx)
+	}
+}
+
+func (r *Registry) Boot(ctx context.Context, name string) bool {
+	node, ok := r.Nodes[name]
+	if !ok {
+		slog.Error("boot requested on invalid node", "node", name)
+		return false
+	}
+
+	return node.Boot(ctx)
+}
+
+func (r *Registry) Shutdown(ctx context.Context, name string) bool {
+	node, ok := r.Nodes[name]
+	if !ok {
+		slog.Error("shutdown requested on invalid node", "node", name)
+		return false
+	}
+
+	return node.Shutdown(ctx)
 }
