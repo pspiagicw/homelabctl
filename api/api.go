@@ -18,6 +18,8 @@ type Server struct {
 	StatusFunc   func(context.Context) []byte
 	BootFunc     func(context.Context, string) []byte
 	ShutdownFunc func(context.Context, string) []byte
+	NodesFunc    func(context.Context) []byte
+	NodeFunc     func(context.Context, string) []byte
 }
 
 func NewServer(config *config.Config) *Server {
@@ -28,10 +30,12 @@ func NewServer(config *config.Config) *Server {
 	return s
 }
 
-func (s *Server) SetFunc(statusFunc func(context.Context) []byte, bootFunc func(context.Context, string) []byte, shutdownFunc func(context.Context, string) []byte) {
+func (s *Server) SetFunc(statusFunc func(context.Context) []byte, bootFunc func(context.Context, string) []byte, shutdownFunc func(context.Context, string) []byte, nodesFunc func(context.Context) []byte, nodeFunc func(context.Context, string) []byte) {
 	s.StatusFunc = statusFunc
 	s.BootFunc = bootFunc
 	s.ShutdownFunc = shutdownFunc
+	s.NodesFunc = nodesFunc
+	s.NodeFunc = nodeFunc
 }
 
 func (s *Server) Init() {
@@ -43,8 +47,8 @@ func (s *Server) Init() {
 	s.router.Get("/status", s.handleStatus)
 
 	s.router.Route("/nodes", func(r chi.Router) {
-		// 	r.Get("/", s.handleListNodes)
-		// 	r.Get("/name", s.handleGetNode)
+		r.Get("/", s.handleListNodes)
+		r.Get("/{name}", s.handleGetNode)
 		r.Post("/{name}/boot", s.handleBoot)
 		r.Post("/{name}/shutdown", s.handleShutdown)
 	})
@@ -59,6 +63,26 @@ func (s *Server) Run(ctx context.Context) {
 	if err != nil {
 		slog.Error("failed to listen on port 3000", "error", err)
 	}
+}
+
+func (s *Server) handleListNodes(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	response := s.NodesFunc(r.Context())
+
+	w.Write(response)
+}
+
+func (s *Server) handleGetNode(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	name := chi.URLParam(r, "name")
+	slog.Info("info request", "node", name)
+	response := s.NodeFunc(r.Context(), name)
+
+	w.Write(response)
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {

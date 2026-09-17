@@ -75,33 +75,3 @@ func (n *Node) RunCommand(ctx context.Context, cmd string) (stdout, stderr strin
 
 	return stdout, stderr, nil
 }
-
-func (n *Node) Shutdown(ctx context.Context) bool {
-	// Skip if the host is already off.
-	if n.State == OFF {
-		slog.Info("node offline, no need for shutdown.", "node", n.Name)
-		return false
-	}
-
-	// Don't do anything if we don't know if the host is up.
-	if n.State != ON {
-		slog.Info("node status unknown, skipping shutdown", "node", n.Name)
-		return false
-	}
-
-	// Shutdown in 60 secs.
-	stdout, stderr, err := n.RunCommand(ctx, "shutdown now")
-	if err != nil {
-		slog.Error("failed to shutdown node", "node", n.Name, "error", err)
-		return false
-	}
-
-	slog.Info("shutdown command executed", "stdout", stdout, "stderr", stderr, "error", err)
-
-	// If no error was returned, assume it will shutdown
-	if stderr == "" && stdout == "" {
-		n.State = OFF
-	}
-
-	return true
-}
