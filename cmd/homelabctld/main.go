@@ -8,5 +8,5 @@ import (
 func main() {
 	version := version.Get()
 
-	daemon.Parse(version)
+	daemon.Run(version)
 }

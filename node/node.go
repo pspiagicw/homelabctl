@@ -48,14 +48,13 @@ func NewNode(name string, cfg config.NodeConfig, ssh config.SSHConfig) *Node {
 // TODO: Initialize the node, check if it's online etc.
 func (n *Node) Init() {
 	n.IsReachable()
+	slog.Info("node initialized!", "node", n.Name, "status", n.State)
 }
 
 func (n *Node) IsReachable() {
-	status, err := utils.Ping(n.cfg.Address)
-	if err != nil {
-		slog.Error("error pinging host for health check.", "error", err)
-	}
-	slog.Info("Health check done for host", "node", n.Name, "status", status)
+	status := utils.Ping(n.cfg.Address)
+
+	slog.Info("health check status", "node", n.Name, "status", status)
 
 	if status {
 		n.State = ON
