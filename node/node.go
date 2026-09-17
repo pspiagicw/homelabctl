@@ -26,6 +26,7 @@ const (
 	UNKNOWN     PowerState = "unknown"
 	OFF         PowerState = "off"
 	BOOTING     PowerState = "booting"
+	SHUTTING    PowerState = "shutting"
 	ON          PowerState = "on"
 	UNREACHABLE PowerState = "unreachable"
 )
@@ -97,6 +98,23 @@ func (n *Node) IsReachable() {
 	}
 }
 
+func (n *Node) FinishBooting() {
+	timer := time.NewTimer(time.Duration(n.cfg.BootTimeout) * time.Second)
+	slog.Info("starting boot timer", "node", n.Name)
+	<-timer.C
+	slog.Info("boot timer complete", "node", n.Name)
+	n.IsReachable()
+
+}
+
+func (n *Node) FinishShutdown() {
+	timer := time.NewTimer(time.Duration(n.cfg.BootTimeout) * time.Second)
+	slog.Info("starting shutdown timer", "node", n.Name)
+	<-timer.C
+	slog.Info("shutdown timer complete", "node", n.Name)
+	n.IsReachable()
+}
+
 func (n *Node) Boot(ctx context.Context) error {
 	slog.Info("sending magic packet", "node", n.Name, "mac", n.cfg.MAC, "address", n.cfg.Address)
 
@@ -125,7 +143,8 @@ func (n *Node) Boot(ctx context.Context) error {
 	}
 
 	// TODO: Check for ping to start etc.
-	n.State = ON
+	n.State = BOOTING
+	go n.FinishBooting()
 	slog.Info("wol request sent", "node", n.Name)
 	return nil
 }
@@ -152,6 +171,7 @@ func (n *Node) Shutdown(ctx context.Context) error {
 
 	slog.Info("shutdown command executed", "stdout", stdout, "stderr", stderr, "error", err)
 
-	n.State = OFF
+	n.State = SHUTTING
+	go n.FinishShutdown()
 	return nil
 }
