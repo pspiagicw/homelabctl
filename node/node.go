@@ -80,20 +80,23 @@ func (n *Node) IsReachable() {
 	}
 }
 
-func (n *Node) Boot(ctx context.Context) {
+func (n *Node) Boot(ctx context.Context) bool {
 	slog.Info("sending magic packet", "node", n.Name, "mac", n.cfg.MAC, "address", n.cfg.Address)
 	packet, err := gowol.NewMagicPacket(n.cfg.MAC)
 
 	if err != nil {
 		slog.Error("failed to create magic packet", "node", n.Name, "error", err)
-		return
+		return false
 	}
 
 	err = packet.Send("255.255.255.255")
 	if err != nil {
 		slog.Error("failed to send magic packaet", "node", n.Name, "error", err)
-		return
+		return false
 	}
 
+	// TODO: Check for ping to start etc.
+	n.State = ON
 	slog.Info("wol request sent", "node", n.Name)
+	return true
 }
