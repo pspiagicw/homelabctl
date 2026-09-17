@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"log/slog"
 	"os"
 
@@ -9,31 +8,34 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func load(path string) (*Config, error) {
-	contents, err := os.ReadFile(path)
+func load(configPath string) *Config {
+	contents, err := os.ReadFile(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("error reading file: %v", err)
+		slog.Error("failed to read file", "file", configPath, "error", err)
+		return nil
 	}
 
 	var cfg *Config
 	err = yaml.Unmarshal(contents, &cfg)
 
 	if err != nil {
-		return nil, fmt.Errorf("error reading yaml: %v", err)
+		slog.Error("failed to load config", "file", configPath, "error", err)
+		return nil
 	}
 
-	return cfg, nil
+	return cfg
 }
 
-func New(configPath string) (*Config, error) {
+func New(configPath string) *Config {
 	if configPath == "" {
 		defaultPath, err := xdg.ConfigFile("homelabctl/config.yaml")
 		if err != nil {
-			return nil, fmt.Errorf("error getting default config path: %v", err)
+			slog.Error("failed to get default config path", "error", err)
+			return nil
 		}
 		configPath = defaultPath
 	}
-	slog.Info("Loading config", "path", configPath)
+	slog.Info("config path validated", "path", configPath)
 
 	return load(configPath)
 }

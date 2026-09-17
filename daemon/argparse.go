@@ -14,26 +14,44 @@ type Context struct {
 }
 
 var Daemon struct {
-	LogLevel string `help:"Set logging verbosity (debug, info, warn, error)" default:"info"`
-	Config   string `help:"Path to config file (overrides default resolution)"`
+	LogLevel  string `help:"Set logging verbosity (debug, info, warn, error)" default:"info"`
+	Config    string `help:"Path to config file (overrides default resolution)"`
+	LogFormat string `help:"log output format: text or json" default:"text"`
 }
 
-func Parse(version version.Info) {
-	kong.Parse(&Daemon)
+func Run(version version.Info) {
+	Parse()
+	InitLogger()
+	config := ParseConfig(Daemon.Config)
 
-	logging.Setup(logging.Config{
-		Level:  Daemon.LogLevel,
-		Format: "text",
-	})
-
-	slog.Info("Starting homelabctld", "version", version.Version)
-	config, err := config.New(Daemon.Config)
-	if err != nil {
-		slog.Error("error loading config", "error", err)
-	}
+	slog.Info("starting homelabctld", "version", version.Version, "commit", version.Commit, "buildDate", version.BuildDate)
 
 	o := NewOrchestrator(config)
 
 	ctx := context.Background()
+	o.Init()
 	o.Start(ctx)
+
+}
+
+func InitLogger() {
+	logging.Setup(logging.Config{
+		Level:  Daemon.LogLevel,
+		Format: Daemon.LogFormat,
+	})
+	slog.Info("logger initialized!", "level", Daemon.LogLevel, "format", Daemon.LogFormat)
+}
+
+func Parse() {
+	kong.Parse(&Daemon)
+}
+
+func ParseConfig(configPath string) *config.Config {
+	config := config.New(Daemon.Config)
+	if config == nil {
+		logging.Fatal("FATAL: failed to load config!")
+	}
+	slog.Info("config loaded and validated!")
+
+	return config
 }

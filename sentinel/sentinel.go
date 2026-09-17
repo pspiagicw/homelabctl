@@ -1,39 +1,58 @@
 package sentinel
 
 import (
+	"log/slog"
+
 	"github.com/pspiagicw/homelabctl/config"
 	"github.com/pspiagicw/homelabctl/utils"
 )
 
-type SentinelState int
+type SentinelState string
 
 const (
-	Normal SentinelState = iota
-	OutageDetected
-	OutageConfirmed
-	Restoring
-	Restored
+	Normal          SentinelState = "Normal"
+	OutageDetected                = "OutageDetected"
+	OutageConfirmed               = "OutageConfirmed"
+	Restoring                     = "Restoring"
+	Restored                      = "Restored"
+	Unkown                        = "Unknown"
 )
 
 // TOOD: Implement last-seen and transision timestamps
 type Sentinel struct {
-	LastPing bool // True if it was successfull
-	State    SentinelState
-	cfg      config.SentinelConfig
+	State         SentinelState
+	cfg           config.SentinelConfig
+	GraceUpTime   int
+	GraceDownTime int
 }
 
 func NewSentinel(cfg *config.Config) *Sentinel {
 	return &Sentinel{
-		State: Normal,
-		cfg:   cfg.Sentinel,
+		State:         Unkown,
+		cfg:           cfg.Sentinel,
+		GraceUpTime:   0,
+		GraceDownTime: 0,
 	}
 }
 
 // TODO: Implement Init(), ping and find out current sentinel status etc.
 func (s *Sentinel) Init() {
+	pingStatus := s.Ping()
+
+	slog.Info("sentinel status", "address", s.cfg.Address, "status", pingStatus)
+
+	if pingStatus {
+		s.State = Normal
+		slog.Info("sentinel is up!")
+	} else {
+		s.State = OutageConfirmed
+		slog.Info("sentinel is down!")
+	}
+
+	slog.Info("sentinel initialized!")
 }
 
 // TODO: Implement pinging!
-func (s *Sentinel) Ping() (bool, error) {
+func (s *Sentinel) Ping() bool {
 	return utils.Ping(s.cfg.Address)
 }

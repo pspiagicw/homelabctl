@@ -28,21 +28,19 @@ func NewOrchestrator(cfg *config.Config) *Orchestrator {
 func (o *Orchestrator) Init() {
 	o.Registry.Init()
 	o.Sentinel.Init()
+	slog.Info("initialization completed!")
 }
 
 func (o *Orchestrator) PowerOff(ctx context.Context) {
+	slog.Info("starting shutdown sequence")
 	for name, node := range o.Registry.Nodes {
-		slog.Info("Powering off", "node", name)
-		err := node.Shutdown(ctx)
-		if err != nil {
-			slog.Error("Error shutting down system", "error", err)
-		}
+		slog.Info("shutdown requested", "node", name)
+		node.Shutdown(ctx)
 	}
 }
 
 func (o *Orchestrator) Start(ctx context.Context) {
-	o.Init()
-
+	slog.Info("orchestrator started!")
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {

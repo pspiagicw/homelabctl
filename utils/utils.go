@@ -1,25 +1,28 @@
 package utils
 
 import (
+	"log/slog"
 	"time"
 
 	probing "github.com/prometheus-community/pro-bing"
 )
 
-func Ping(address string) (bool, error) {
+func Ping(address string) bool {
 	pinger, err := probing.NewPinger(address)
 	if err != nil {
-		return false, err
+		slog.Error("failed to initialize pinger", "addresss", address, "error", err)
+		return false
 	}
 
 	pinger.Count = 1
 	pinger.Timeout = 3 * time.Second
 
 	if err = pinger.Run(); err != nil {
-		return false, err
+		slog.Error("failed to run ping", "address", address, "error", err)
+		return false
 	}
 
 	stats := pinger.Statistics()
 
-	return stats.PacketsRecv > 0, nil
+	return stats.PacketsRecv > 0
 }

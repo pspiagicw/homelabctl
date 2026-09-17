@@ -6,12 +6,16 @@ import (
 	"time"
 )
 
+func (s *Sentinel) SetState(state SentinelState) {
+	slog.Info("sentinel state transition", "from", s.State, "to", state)
+	s.State = state
+	s.GraceDownTime = 0
+	s.GraceUpTime = 0
+}
 func (s *Sentinel) Run(ctx context.Context, onOutage, onRestore func(context.Context)) {
 	ticker := time.NewTicker(time.Duration(s.cfg.CheckInterval) * time.Second)
-	slog.Info("Starting sentinel monitoring!")
-	slog.Info("Sentinel Address", "addresss", s.cfg.Address)
-	downTime := 0
-	upTime := 0
+	slog.Info("sentinel started!")
+	slog.Info("sentinel info", "addresss", s.cfg.Address, "status", s.State)
 
 	for {
 		select {
@@ -19,63 +23,54 @@ func (s *Sentinel) Run(ctx context.Context, onOutage, onRestore func(context.Con
 			slog.Info("shutdown requested, shutting down sentinel watcher.")
 			return
 		case <-ticker.C:
-			pingStatus, err := s.Ping()
+			pingStatus := s.Ping()
 
-			slog.Info("Ping status", "response", pingStatus)
-
-			if err != nil {
-				slog.Error("error pinging sentinel", "error", err)
-			}
+			slog.Info("sentinel status", "response", pingStatus)
+			slog.Info("sentinel info", "addresss", s.cfg.Address, "status", s.State)
 
 			switch s.State {
 			case Normal:
-				slog.Info("Sentinel online, no action needed.")
+				slog.Info("sentinel online, no action needed.")
 				if !pingStatus {
-					// Outage started
-					s.State = OutageDetected
+					s.SetState(OutageDetected)
 				}
 				break
 			case OutageDetected:
-				slog.Warn("Sentinel offline, waiting for it to come online", "downtime", downTime, "total", s.cfg.OutageGracePeriod)
+				slog.Warn("sentinel offline, waiting for outage confirmation", "downtime", s.GraceDownTime, "total", s.cfg.OutageGracePeriod)
 				if pingStatus {
-					upTime = 0
-					downTime = 0
-					s.State = Normal
+					s.SetState(Normal)
 					break
 				}
-				downTime += s.cfg.CheckInterval
-				if downTime > s.cfg.OutageGracePeriod {
-					s.State = OutageConfirmed
+				s.GraceDownTime += s.cfg.CheckInterval
+				if s.GraceDownTime >= s.cfg.OutageGracePeriod {
+					s.SetState(OutageConfirmed)
 				}
 				break
 			case OutageConfirmed:
-				slog.Warn("Confirmed outage, shutting down systems.")
+				slog.Warn("outage confirmed. starting shutdown sequence!")
 				// TODO: Check if we need to run this in a goroutine.
 				onOutage(ctx)
 				if pingStatus {
-					s.State = Restoring
-					downTime = 0
-					upTime = 0
+					slog.Warn("successfull ping, assuming sentinel online")
+					s.SetState(Restoring)
 				}
 				break
 			case Restoring:
-				slog.Warn("Sentinel online; waiting for stable power", "uptime", upTime, "total", s.cfg.RestoreGracePeriod)
+				slog.Warn("sentinel online, waiting for stable power", "uptime", s.GraceUpTime, "total", s.cfg.RestoreGracePeriod)
 				if !pingStatus {
-					s.State = OutageDetected
-					downTime = 0
-					upTime = 0
+					slog.Warn("ping failed, assuming outage")
+					s.SetState(OutageDetected)
 				}
-				upTime += s.cfg.CheckInterval
-				if upTime > s.cfg.RestoreGracePeriod {
+				s.GraceUpTime += s.cfg.CheckInterval
+				if s.GraceUpTime >= s.cfg.RestoreGracePeriod {
 					s.State = Restored
+					s.SetState(Restored)
 				}
 				break
 			case Restored:
-				slog.Warn("Outage Restored, bringing systems back to normal.")
+				slog.Warn("outage restored, starting restore sequence!")
+				s.SetState(Normal)
 				onRestore(ctx)
-				s.State = Normal
-				downTime = 0
-				upTime = 0
 				break
 			}
 		}

@@ -1,6 +1,8 @@
 package node
 
 import (
+	"log/slog"
+
 	"github.com/pspiagicw/homelabctl/config"
 )
 
@@ -26,13 +28,5 @@ func (r *Registry) Init() {
 	for _, node := range r.Nodes {
 		node.Init()
 	}
+	slog.Info("registry initialized!")
 }
-
-// func (r *Registry) Get(name string) (*Node, error) {
-// 	node, ok := r.Nodes[name]
-// 	if !ok {
-// 		return nil, fmt.Errorf("error no node %s found in registry", name)
-// 	}
-//
-// 	return node, nil
-// }
