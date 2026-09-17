@@ -1,8 +1,11 @@
 package node
 
 import (
+	"context"
 	"log/slog"
+	"time"
 
+	"github.com/linde12/gowol"
 	"github.com/pspiagicw/homelabctl/config"
 	"github.com/pspiagicw/homelabctl/utils"
 )
@@ -34,6 +37,20 @@ type Node struct {
 	SSH   config.SSHConfig
 }
 
+type NodeStatus struct {
+	PowerState string    `json:"power_state"`
+	LastSeen   time.Time `json:"last_seen"`
+	Address    string    `json:"address"`
+}
+
+func (n *Node) Status() *NodeStatus {
+	status := &NodeStatus{
+		PowerState: string(n.State),
+		Address:    n.cfg.Address,
+	}
+	return status
+}
+
 func NewNode(name string, cfg config.NodeConfig, ssh config.SSHConfig) *Node {
 	n := &Node{
 		Name:  name,
@@ -61,4 +78,22 @@ func (n *Node) IsReachable() {
 	} else {
 		n.State = OFF
 	}
+}
+
+func (n *Node) Boot(ctx context.Context) {
+	slog.Info("sending magic packet", "node", n.Name, "mac", n.cfg.MAC, "address", n.cfg.Address)
+	packet, err := gowol.NewMagicPacket(n.cfg.MAC)
+
+	if err != nil {
+		slog.Error("failed to create magic packet", "node", n.Name, "error", err)
+		return
+	}
+
+	err = packet.Send("255.255.255.255")
+	if err != nil {
+		slog.Error("failed to send magic packaet", "node", n.Name, "error", err)
+		return
+	}
+
+	slog.Info("wol request sent", "node", n.Name)
 }
