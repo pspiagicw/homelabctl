@@ -69,6 +69,7 @@ func (s *Server) handleListNodes(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
+	slog.Info("list request")
 	response := s.NodesFunc(r.Context())
 
 	w.Write(response)
@@ -89,6 +90,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 
+	slog.Info("status request")
 	response := s.StatusFunc(r.Context())
 
 	w.Write(response)
@@ -99,8 +101,8 @@ func (s *Server) handleBoot(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	name := chi.URLParam(r, "name")
-	slog.Info("boot request", "node", name)
 
+	slog.Info("boot request", "node", name)
 	response := s.BootFunc(r.Context(), name)
 
 	w.Write(response)
@@ -111,8 +113,8 @@ func (s *Server) handleShutdown(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	name := chi.URLParam(r, "name")
-	slog.Info("shutdown request", "node", name)
 
+	slog.Info("shutdown request", "node", name)
 	response := s.ShutdownFunc(r.Context(), name)
 
 	w.Write(response)

@@ -8,29 +8,34 @@ import (
 	"time"
 
 	"github.com/pspiagicw/homelabctl/config"
+	"github.com/pspiagicw/homelabctl/logging"
 	"github.com/pspiagicw/homelabctl/utils"
 )
 
 type SentinelState string
 
 const (
-	Normal          SentinelState = "Normal"
-	OutageDetected                = "OutageDetected"
-	OutageConfirmed               = "OutageConfirmed"
-	Restoring                     = "Restoring"
-	Restored                      = "Restored"
-	Unkown                        = "Unknown"
+	Normal          = "Normal"
+	OutageDetected  = "OutageDetected"
+	OutageConfirmed = "OutageConfirmed"
+	Restoring       = "Restoring"
+	Restored        = "Restored"
+	Unkown          = "Unknown"
 )
 
 // TOOD: Implement last-seen and transision timestamps
 type Sentinel struct {
-	State         SentinelState
-	cfg           config.SentinelConfig
-	GraceUpTime   int
-	GraceDownTime int
-	Logger        *slog.Logger
-	OnOutage      func(context.Context)
-	OnRestore     func(context.Context)
+	State            string
+	cfg              config.SentinelConfig
+	GraceUpTime      int
+	GraceDownTime    int
+	Logger           *slog.Logger
+	OnOutage         func(context.Context)
+	OnRestore        func(context.Context)
+	LastSeen         time.Time
+	LastTransitioned time.Time
+
+	Log *slog.Logger
 }
 
 type SentinelStatus struct {
@@ -45,6 +50,7 @@ func NewSentinel(cfg *config.Config) *Sentinel {
 		cfg:           cfg.Sentinel,
 		GraceUpTime:   0,
 		GraceDownTime: 0,
+		Log:           logging.WithComponent("SENTINEL"),
 	}
 }
 
@@ -72,12 +78,19 @@ func (s *Sentinel) Init() {
 
 // TODO: Implement pinging!
 func (s *Sentinel) Ping() bool {
-	return utils.Ping(s.cfg.Address)
+	status := utils.Ping(s.cfg.Address)
+	if status {
+		s.LastSeen = time.Now()
+	}
+
+	return status
 }
 
 func (s *Sentinel) Status() *SentinelStatus {
 	status := &SentinelStatus{
-		State: string(s.State),
+		State:            s.State,
+		LastSeen:         s.LastSeen,
+		LastTransitioned: s.LastTransitioned,
 	}
 	return status
 }

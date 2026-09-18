@@ -46,7 +46,7 @@ nodes:
   falcon1:
     address: 172.20.1.44
     mac: "00:23:24:C4:27:7C"
-    wait_after_boot: 45
+    wait_after_boot: 60
     services:
       - transmission
       - navidrome

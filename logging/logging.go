@@ -5,6 +5,9 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
+
+	"github.com/lmittmann/tint"
 )
 
 type Format string
@@ -12,6 +15,15 @@ type Format string
 const (
 	FormatText Format = "text"
 	FormatJSON Format = "json"
+)
+
+// Color codes (8-bit ANSI, see tint.Attr docs)
+const (
+	colorComponent = 4 // cyan
+	colorAddress   = 5
+	colorStatus    = 1
+	colorNode      = 3 // yellow
+	colorErr       = 9 // bright red
 )
 
 type Config struct {
@@ -33,7 +45,7 @@ type Config struct {
 	Output *os.File
 }
 
-func Setup(cfg Config) *slog.Logger {
+func Setup(cfg Config) {
 	level := parseLevel(cfg.Level)
 
 	out := cfg.Output
@@ -41,25 +53,26 @@ func Setup(cfg Config) *slog.Logger {
 		out = os.Stderr
 	}
 
-	addSource := cfg.AddSource || level == slog.LevelDebug
+	addSource := level == slog.LevelDebug
 
-	handlerOpts := slog.HandlerOptions{
-		Level:     level,
-		AddSource: addSource,
-	}
-
-	var handler slog.Handler
 	switch parseFormat(cfg.Format) {
 	case FormatJSON:
-		handler = slog.NewJSONHandler(out, &handlerOpts)
+		handler := slog.NewJSONHandler(out, &slog.HandlerOptions{
+			Level:     level,
+			AddSource: addSource,
+		})
+		logger := slog.New(handler)
+		slog.SetDefault(logger)
 	default:
-		handler = slog.NewTextHandler(out, &handlerOpts)
+		handler := tint.NewTextHandler(out, &tint.Options{
+			Level:       level,
+			AddSource:   addSource,
+			TimeFormat:  time.Kitchen,
+			ReplaceAttr: replaceAttr,
+		})
+		logger := slog.New(handler)
+		slog.SetDefault(logger)
 	}
-
-	logger := slog.New(handler)
-	slog.SetDefault(logger)
-
-	return logger
 }
 
 // parseLevel converts a case-insensitive level string to a slog.Level,
@@ -95,4 +108,56 @@ func parseFormat(s string) Format {
 func Fatal(msg string, args ...any) {
 	slog.Error(msg, args...)
 	os.Exit(1)
+}
+
+// replaceAttr applies global, key-based coloring rules so call sites
+// don't need to wrap every attr in tint.Attr() manually.
+func replaceAttr(groups []string, a slog.Attr) slog.Attr {
+	// Any attr whose value is an error → always red, regardless of key.
+	if a.Value.Kind() == slog.KindAny {
+		if _, ok := a.Value.Any().(error); ok {
+			return tint.Attr(colorErr, a)
+		}
+	}
+
+	if a.Value.Kind() == slog.KindBool {
+		if a.Value.Bool() {
+			return tint.Attr(2, a) // green
+		}
+		return tint.Attr(1, a) // red
+	}
+
+	if a.Value.Kind() == slog.KindString {
+		switch a.Value.String() {
+		case "on", "On", "Normal":
+			return tint.Attr(2, a) // green
+		case "off", "Off", "OutageDetected", "OutageConfirmed":
+			return tint.Attr(1, a) // red
+		case "booting", "Booting", "Restoring", "Restored":
+			return tint.Attr(3, a) // yellow
+		case "unreachable", "Unreachable":
+			return tint.Attr(9, a) // bright red
+		}
+	}
+
+	// Key-based rules.
+	switch a.Key {
+	case "component":
+		return tint.Attr(colorComponent, a)
+	case "node":
+		return tint.Attr(colorNode, a)
+	case "address":
+		return tint.Attr(colorAddress, a)
+	case "status":
+		return tint.Attr(colorStatus, a)
+	}
+
+	return a
+}
+
+// WithComponent returns a logger scoped to a named subsystem
+// (e.g. "sentinel", "scheduler", "override", "api").
+// Every log line through it carries component=<name>, colorized per replaceAttr.
+func WithComponent(name string) *slog.Logger {
+	return slog.Default().With("component", name)
 }

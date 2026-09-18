@@ -67,7 +67,7 @@ func (n *Node) RunCommand(ctx context.Context, cmd string) (stdout, stderr strin
 	var e bytes.Buffer
 	session.Stdout = &b
 	session.Stderr = &e
-	slog.Info("ssh connected", "node", n.Name, "addresss", n.cfg.Address)
+	slog.Info("ssh connected", "node", n.Name, "address", n.cfg.Address)
 
 	if err := session.Run(cmd); err != nil {
 		return "", "", fmt.Errorf("failed to run cmd: %v", err)

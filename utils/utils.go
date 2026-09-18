@@ -11,7 +11,7 @@ import (
 func Ping(address string) bool {
 	pinger, err := probing.NewPinger(address)
 	if err != nil {
-		slog.Error("failed to initialize pinger", "addresss", address, "error", err)
+		slog.Error("failed to initialize pinger", "address", address, "error", err)
 		return false
 	}
 
