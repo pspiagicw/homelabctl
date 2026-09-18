@@ -23,6 +23,11 @@ type DaemonStatus struct {
 	Registry *node.RegistryStatus     `json:"registry"`
 }
 
+type Response struct {
+	Status  bool   `json:"status"`
+	Message string `json:"message"`
+}
+
 func NewOrchestrator(cfg *config.Config) *Orchestrator {
 	o := &Orchestrator{
 		Registry: node.NewRegistry(cfg),
@@ -125,10 +130,7 @@ func (o *Orchestrator) Shutdown(ctx context.Context, name string) any {
 		message = err.Error()
 	}
 
-	return struct {
-		Status  bool   `json:"status"`
-		Message string `json:"message"`
-	}{
+	return Response{
 		err == nil,
 		message,
 	}
@@ -137,6 +139,12 @@ func (o *Orchestrator) Shutdown(ctx context.Context, name string) any {
 
 // TODO: Check if we need to send only true/false or node info too!
 func (o *Orchestrator) Boot(ctx context.Context, name string) any {
+	if o.Sentinel.State != sentinel.Normal {
+		return Response{
+			false,
+			"sentinel currently offline; can't boot any machines.",
+		}
+	}
 	err := o.Registry.Boot(ctx, name)
 
 	message := ""
@@ -144,10 +152,7 @@ func (o *Orchestrator) Boot(ctx context.Context, name string) any {
 		message = err.Error()
 	}
 
-	return struct {
-		Status  bool   `json:"status"`
-		Message string `json:"message"`
-	}{
+	return Response{
 		err == nil,
 		message,
 	}

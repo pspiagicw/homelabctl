@@ -20,23 +20,22 @@ import (
 //     - immich
 //     - truenas
 
-type PowerState string
-
 const (
-	UNKNOWN     PowerState = "unknown"
-	OFF         PowerState = "off"
-	BOOTING     PowerState = "booting"
-	SHUTTING    PowerState = "shutting"
-	ON          PowerState = "on"
-	UNREACHABLE PowerState = "unreachable"
+	UNKNOWN     string = "unknown"
+	OFF         string = "off"
+	BOOTING     string = "booting"
+	SHUTTING    string = "shutting"
+	ON          string = "on"
+	UNREACHABLE string = "unreachable"
 )
 
 // TODO: Implement services workflow
 type Node struct {
-	Name  string
-	cfg   config.NodeConfig
-	State PowerState
-	SSH   config.SSHConfig
+	Name     string
+	cfg      config.NodeConfig
+	State    string
+	SSH      config.SSHConfig
+	LastSeen time.Time
 }
 
 type NodeStatus struct {
@@ -53,8 +52,9 @@ type DetailedStatus struct {
 
 func (n *Node) Status() *NodeStatus {
 	status := &NodeStatus{
-		PowerState: string(n.State),
+		PowerState: n.State,
 		Address:    n.cfg.Address,
+		LastSeen:   n.LastSeen,
 	}
 	return status
 }
@@ -89,10 +89,11 @@ func (n *Node) Init() {
 func (n *Node) IsReachable() {
 	status := utils.Ping(n.cfg.Address)
 
-	slog.Info("health check status", "node", n.Name, "status", status)
+	slog.Debug("health check status", "node", n.Name, "status", status)
 
 	if status {
 		n.State = ON
+		n.LastSeen = time.Now()
 	} else {
 		n.State = OFF
 	}
@@ -138,7 +139,7 @@ func (n *Node) Boot(ctx context.Context) error {
 
 	err = packet.Send("255.255.255.255")
 	if err != nil {
-		slog.Error("failed to send magic packaet", "node", n.Name, "error", err)
+		slog.Error("failed to send magic packet", "node", n.Name, "error", err)
 		return fmt.Errorf("failed to send magic packet; node: %s; error: %v", n.Name, err)
 	}
 

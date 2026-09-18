@@ -66,9 +66,9 @@ func (r *Registry) NodeStatus(ctx context.Context, name string) (*DetailedStatus
 }
 
 func (r *Registry) ShutdownAll(ctx context.Context) {
-	slog.Info("starting shutdown sequence")
+	slog.Debug("starting shutdown sequence")
 	for name, node := range r.Nodes {
-		slog.Info("shutdown requested", "node", name)
+		slog.Debug("shutdown requested", "node", name)
 		node.Shutdown(ctx)
 	}
 }

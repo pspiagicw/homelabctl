@@ -6,16 +6,17 @@ import (
 	"time"
 )
 
-func (s *Sentinel) SetState(state SentinelState) {
+func (s *Sentinel) SetState(state string) {
 	slog.Info("sentinel state transition", "from", s.State, "to", state)
 	s.State = state
 	s.GraceDownTime = 0
 	s.GraceUpTime = 0
+	s.LastTransitioned = time.Now()
 }
 func (s *Sentinel) Run(ctx context.Context) {
 	ticker := time.NewTicker(time.Duration(s.cfg.CheckInterval) * time.Second)
 	slog.Info("sentinel started!")
-	slog.Info("sentinel info", "addresss", s.cfg.Address, "status", s.State)
+	slog.Info("sentinel info", "address", s.cfg.Address, "status", s.State)
 
 	for {
 		select {
@@ -25,8 +26,8 @@ func (s *Sentinel) Run(ctx context.Context) {
 		case <-ticker.C:
 			pingStatus := s.Ping()
 
-			slog.Info("sentinel status", "response", pingStatus)
-			slog.Info("sentinel info", "addresss", s.cfg.Address, "status", s.State)
+			slog.Debug("sentinel status", "response", pingStatus)
+			slog.Debug("sentinel info", "address", s.cfg.Address, "status", s.State)
 
 			switch s.State {
 			case Normal:
@@ -34,7 +35,6 @@ func (s *Sentinel) Run(ctx context.Context) {
 				if !pingStatus {
 					s.SetState(OutageDetected)
 				}
-				break
 			case OutageDetected:
 				slog.Warn("sentinel offline, waiting for outage confirmation", "downtime", s.GraceDownTime, "total", s.cfg.OutageGracePeriod)
 				if pingStatus {
@@ -45,7 +45,6 @@ func (s *Sentinel) Run(ctx context.Context) {
 				if s.GraceDownTime >= s.cfg.OutageGracePeriod {
 					s.SetState(OutageConfirmed)
 				}
-				break
 			case OutageConfirmed:
 				slog.Warn("outage confirmed. starting shutdown sequence!")
 				// TODO: Check if we need to run this in a goroutine.
@@ -54,7 +53,6 @@ func (s *Sentinel) Run(ctx context.Context) {
 					slog.Warn("successfull ping, assuming sentinel online")
 					s.SetState(Restoring)
 				}
-				break
 			case Restoring:
 				slog.Warn("sentinel online, waiting for stable power", "uptime", s.GraceUpTime, "total", s.cfg.RestoreGracePeriod)
 				if !pingStatus {
@@ -66,12 +64,10 @@ func (s *Sentinel) Run(ctx context.Context) {
 					s.State = Restored
 					s.SetState(Restored)
 				}
-				break
 			case Restored:
 				slog.Warn("outage restored, starting restore sequence!")
 				s.SetState(Normal)
 				s.OnRestore(ctx)
-				break
 			}
 		}
 	}
