@@ -26,8 +26,8 @@ func (s *Sentinel) Run(ctx context.Context) {
 		case <-ticker.C:
 			pingStatus := s.Ping()
 
-			slog.Debug("sentinel status", "response", pingStatus)
-			slog.Debug("sentinel info", "address", s.cfg.Address, "status", s.State)
+			slog.Info("sentinel status", "response", pingStatus)
+			slog.Info("sentinel info", "address", s.cfg.Address, "status", s.State)
 
 			switch s.State {
 			case Normal:

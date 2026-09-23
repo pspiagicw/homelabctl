@@ -89,7 +89,7 @@ func (n *Node) Init() {
 func (n *Node) IsReachable() {
 	status := utils.Ping(n.cfg.Address)
 
-	slog.Debug("health check status", "node", n.Name, "status", status)
+	slog.Info("health check status", "node", n.Name, "status", status)
 
 	if status {
 		n.State = ON
