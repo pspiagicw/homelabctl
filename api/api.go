@@ -137,3 +137,9 @@ func (s *Server) handleShutdown(w http.ResponseWriter, r *http.Request) {
 	s.WriteResponse(response, err, w)
 
 }
+
+// Handler returns the HTTP handler for this server.
+// This allows tests to use httptest.NewServer(s.Handler()) or similar.
+func (s *Server) Handler() http.Handler {
+	return s.router
+}
