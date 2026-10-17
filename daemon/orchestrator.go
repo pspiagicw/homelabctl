@@ -45,24 +45,6 @@ func NewOrchestrator(cfg *config.Config) *Orchestrator {
 		},
 	)
 
-	// o.Server.SetFunc(
-	// 	func(ctx context.Context) []byte {
-	// 		return utils.ToJSON(o.Status(ctx))
-	// 	},
-	// 	func(ctx context.Context, name string) []byte {
-	// 		return utils.ToJSON(o.Boot(ctx, name))
-	// 	},
-	// 	func(ctx context.Context, name string) []byte {
-	// 		return utils.ToJSON(o.Shutdown(ctx, name))
-	// 	},
-	// 	func(ctx context.Context) []byte {
-	// 		return utils.ToJSON(o.RegistryStatus(ctx))
-	// 	},
-	// 	func(ctx context.Context, name string) []byte {
-	// 		return utils.ToJSON(o.NodeStatus(ctx, name))
-	// 	},
-	// )
-
 	return o
 }
 

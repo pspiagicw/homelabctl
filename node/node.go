@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/linde12/gowol"
+	"github.com/pspiagicw/homelabctl/agents"
 	"github.com/pspiagicw/homelabctl/apierr"
 	"github.com/pspiagicw/homelabctl/config"
 	"github.com/pspiagicw/homelabctl/utils"
@@ -32,11 +32,15 @@ const (
 
 // TODO: Implement services workflow
 type Node struct {
-	Name     string
-	cfg      config.NodeConfig
-	State    string
-	SSH      config.SSHConfig
-	LastSeen time.Time
+	Name      string
+	cfg       config.NodeConfig
+	State     string
+	SSH       config.SSHConfig
+	LastSeen  time.Time
+	PingFunc  agents.Pinger
+	RunFunc   agents.Runner
+	WakeFunc  agents.WakeSender
+	AfterFunc agents.After
 }
 
 type NodeStatus struct {
@@ -77,6 +81,10 @@ func NewNode(name string, cfg config.NodeConfig, ssh config.SSHConfig) *Node {
 		State: UNKNOWN,
 		SSH:   ssh,
 	}
+	n.PingFunc = utils.Ping
+	n.RunFunc = utils.SSHRun
+	n.WakeFunc = utils.Wake
+	n.AfterFunc = utils.After
 
 	return n
 }
@@ -88,7 +96,8 @@ func (n *Node) Init() {
 }
 
 func (n *Node) IsReachable() {
-	status := utils.Ping(n.cfg.Address)
+	// status := utils.(n.cfg.Address)
+	status := n.PingFunc(n.cfg.Address)
 
 	slog.Info("health check status", "node", n.Name, "status", status)
 
@@ -101,18 +110,20 @@ func (n *Node) IsReachable() {
 }
 
 func (n *Node) FinishBooting() {
-	timer := time.NewTimer(time.Duration(n.cfg.BootTimeout) * time.Second)
+	// timer := time.NewTimer(time.Duration(n.cfg.BootTimeout) * time.Second)
+	timer := n.AfterFunc(time.Duration(n.cfg.BootTimeout) * time.Second)
 	slog.Info("starting boot timer", "node", n.Name)
-	<-timer.C
+	<-timer
 	slog.Info("boot timer complete", "node", n.Name)
 	n.IsReachable()
 
 }
 
 func (n *Node) FinishShutdown() {
-	timer := time.NewTimer(time.Duration(n.cfg.BootTimeout) * time.Second)
+	// timer := time.NewTimer(time.Duration(n.cfg.BootTimeout) * time.Second)
+	timer := n.AfterFunc(time.Duration(n.cfg.BootTimeout) * time.Second)
 	slog.Info("starting shutdown timer", "node", n.Name)
-	<-timer.C
+	<-timer
 	slog.Info("shutdown timer complete", "node", n.Name)
 	n.IsReachable()
 }
@@ -130,18 +141,11 @@ func (n *Node) Boot(ctx context.Context) error {
 		return fmt.Errorf("node status unknown, skipping boot; node: %s; %w", n.Name, apierr.ErrConflict)
 	}
 
-	packet, err := gowol.NewMagicPacket(n.cfg.MAC)
+	err := n.WakeFunc(n.cfg.MAC)
 
 	if err != nil {
-		// Log one for the server and return error for the request
-		slog.Error("failed to create magic packet", "node", n.Name, "error", err)
-		return fmt.Errorf("failed to create magic packet; node: %s; error: %v; %w", n.Name, err, apierr.ErrUpstream)
-	}
-
-	err = packet.Send("255.255.255.255")
-	if err != nil {
-		slog.Error("failed to send magic packet", "node", n.Name, "error", err)
-		return fmt.Errorf("failed to send magic packet; node: %s; error: %v; %w", n.Name, err, apierr.ErrUpstream)
+		slog.Error("failed to boot node", "node", n.Name, "error", err)
+		return fmt.Errorf("failed to shutdown node; node %s; error: %v; %w", n.Name, err, apierr.ErrUpstream)
 	}
 
 	// TODO: Check for ping to start etc.
@@ -165,13 +169,14 @@ func (n *Node) Shutdown(ctx context.Context) error {
 	}
 
 	// Shutdown in 60 secs.
-	stdout, stderr, err := n.RunCommand(ctx, "shutdown now")
+	err := n.RunFunc(ctx, n.cfg.Address, "shutdown now", n.SSH)
+	// stdout, stderr, err := n.RunCommand(ctx, "shutdown now")
 	if err != nil {
 		slog.Error("failed to shutdown node", "node", n.Name, "error", err)
 		return fmt.Errorf("failed to shutdown node; node: %s; error: %v; %w", n.Name, err, apierr.ErrUpstream)
 	}
 
-	slog.Info("shutdown command executed", "stdout", stdout, "stderr", stderr, "error", err)
+	// slog.Info("shutdown command executed", "stdout", stdout, "stderr", stderr, "error", err)
 
 	n.State = SHUTTING
 	go n.FinishShutdown()

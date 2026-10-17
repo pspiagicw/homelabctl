@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/pspiagicw/homelabctl/agents"
 	"github.com/pspiagicw/homelabctl/config"
 	"github.com/pspiagicw/homelabctl/logging"
 	"github.com/pspiagicw/homelabctl/utils"
@@ -35,6 +36,9 @@ type Sentinel struct {
 	LastSeen         time.Time
 	LastTransitioned time.Time
 
+	AfterFunc agents.After
+	PingFunc  agents.Pinger
+
 	Log *slog.Logger
 }
 
@@ -51,7 +55,11 @@ func NewSentinel(cfg *config.Config) *Sentinel {
 		GraceUpTime:   0,
 		GraceDownTime: 0,
 		Log:           logging.WithComponent("SENTINEL"),
+
+		AfterFunc: utils.After,
+		PingFunc:  utils.Ping,
 	}
+
 }
 
 func (s *Sentinel) SetFunc(onOutage, onRestore func(context.Context)) {
@@ -78,7 +86,8 @@ func (s *Sentinel) Init() {
 
 // TODO: Implement pinging!
 func (s *Sentinel) Ping() bool {
-	status := utils.Ping(s.cfg.Address)
+	// status := utils.Ping(s.cfg.Address)
+	status := s.PingFunc(s.cfg.Address)
 	if status {
 		s.LastSeen = time.Now()
 	}
