@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/pspiagicw/homelabctl/apierr"
 	"github.com/pspiagicw/homelabctl/config"
 )
 
@@ -59,7 +60,7 @@ func (r *Registry) NodeStatus(ctx context.Context, name string) (*DetailedStatus
 	node, ok := r.Nodes[name]
 	if !ok {
 		slog.Error("info requested on invalid node", "node", name)
-		return nil, fmt.Errorf("info requested on invalid node; node: %s", name)
+		return nil, fmt.Errorf("info requested on invalid node; node: %s; %w", name, apierr.ErrNotFound)
 	}
 
 	return node.GetDetailedStatus(), nil
@@ -77,7 +78,7 @@ func (r *Registry) Boot(ctx context.Context, name string) error {
 	node, ok := r.Nodes[name]
 	if !ok {
 		slog.Error("boot requested on invalid node", "node", name)
-		return fmt.Errorf("boot requested on invalid node; node: %s", name)
+		return fmt.Errorf("boot requested on invalid node; node: %s; %w", name, apierr.ErrNotFound)
 	}
 
 	return node.Boot(ctx)
@@ -87,7 +88,7 @@ func (r *Registry) Shutdown(ctx context.Context, name string) error {
 	node, ok := r.Nodes[name]
 	if !ok {
 		slog.Error("shutdown requested on invalid node", "node", name)
-		return fmt.Errorf("shutdown requested on invalid node; node: %s", name)
+		return fmt.Errorf("shutdown requested on invalid node; node: %s; %w", name, apierr.ErrNotFound)
 	}
 
 	return node.Shutdown(ctx)

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/linde12/gowol"
+	"github.com/pspiagicw/homelabctl/apierr"
 	"github.com/pspiagicw/homelabctl/config"
 	"github.com/pspiagicw/homelabctl/utils"
 )
@@ -121,12 +122,12 @@ func (n *Node) Boot(ctx context.Context) error {
 
 	if n.State == ON {
 		slog.Info("node online, no need of boot", "node", n.Name)
-		return fmt.Errorf("node online, no need of boot; node: %s", n.Name)
+		return fmt.Errorf("node online, no need of boot; node: %s; %w", n.Name, apierr.ErrConflict)
 	}
 
 	if n.State != OFF {
 		slog.Info("node status unknown, skipping boot", "node", n.Name)
-		return fmt.Errorf("node status unknown, skipping boot; node: %s", n.Name)
+		return fmt.Errorf("node status unknown, skipping boot; node: %s; %w", n.Name, apierr.ErrConflict)
 	}
 
 	packet, err := gowol.NewMagicPacket(n.cfg.MAC)
@@ -134,13 +135,13 @@ func (n *Node) Boot(ctx context.Context) error {
 	if err != nil {
 		// Log one for the server and return error for the request
 		slog.Error("failed to create magic packet", "node", n.Name, "error", err)
-		return fmt.Errorf("failed to create magic packet; node: %s; error: %v", n.Name, err)
+		return fmt.Errorf("failed to create magic packet; node: %s; error: %v; %w", n.Name, err, apierr.ErrUpstream)
 	}
 
 	err = packet.Send("255.255.255.255")
 	if err != nil {
 		slog.Error("failed to send magic packet", "node", n.Name, "error", err)
-		return fmt.Errorf("failed to send magic packet; node: %s; error: %v", n.Name, err)
+		return fmt.Errorf("failed to send magic packet; node: %s; error: %v; %w", n.Name, err, apierr.ErrUpstream)
 	}
 
 	// TODO: Check for ping to start etc.
@@ -154,20 +155,20 @@ func (n *Node) Shutdown(ctx context.Context) error {
 	// Skip if the host is already off.
 	if n.State == OFF {
 		slog.Info("node offline, no need for shutdown.", "node", n.Name)
-		return fmt.Errorf("node offline, no need for shutdown; node: %s", n.Name)
+		return fmt.Errorf("node offline, no need for shutdown; node: %s; %w", n.Name, apierr.ErrConflict)
 	}
 
 	// Don't do anything if we don't know if the host is up.
 	if n.State != ON {
 		slog.Info("node status unknown, skipping shutdown", "node", n.Name)
-		return fmt.Errorf("node status unknown, skipping shutdown; node: %s", n.Name)
+		return fmt.Errorf("node status unknown, skipping shutdown; node: %s; %w", n.Name, apierr.ErrConflict)
 	}
 
 	// Shutdown in 60 secs.
 	stdout, stderr, err := n.RunCommand(ctx, "shutdown now")
 	if err != nil {
 		slog.Error("failed to shutdown node", "node", n.Name, "error", err)
-		return fmt.Errorf("failed to shutdown node; node: %s; error: %v", n.Name, err)
+		return fmt.Errorf("failed to shutdown node; node: %s; error: %v; %w", n.Name, err, apierr.ErrUpstream)
 	}
 
 	slog.Info("shutdown command executed", "stdout", stdout, "stderr", stderr, "error", err)

@@ -8,39 +8,56 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/pspiagicw/homelabctl/config"
+	"github.com/pspiagicw/homelabctl/utils"
 )
+
+type Backend interface {
+	Status(ctx context.Context) (any, error)
+	ListNodes(ctx context.Context) (any, error)
+	GetNode(ctx context.Context, name string) (any, error)
+	Boot(ctx context.Context, name string) (any, error)
+	Shutdown(ctx context.Context, name string) (any, error)
+}
 
 type Server struct {
 	cfg *config.Config
 
-	router chi.Router
+	router  chi.Router
+	backend Backend
 
-	StatusFunc   func(context.Context) []byte
-	BootFunc     func(context.Context, string) []byte
-	ShutdownFunc func(context.Context, string) []byte
-	NodesFunc    func(context.Context) []byte
-	NodeFunc     func(context.Context, string) []byte
+	// StatusFunc   func(context.Context) []byte
+	// BootFunc     func(context.Context, string) []byte
+	// ShutdownFunc func(context.Context, string) []byte
+	// NodesFunc    func(context.Context) []byte
+	// NodeFunc     func(context.Context, string) []byte
 }
 
-func NewServer(config *config.Config) *Server {
+func NewServer(config *config.Config, b Backend) *Server {
 	s := &Server{
-		cfg: config,
+		cfg:     config,
+		backend: b,
 	}
 
 	return s
 }
 
-func (s *Server) SetFunc(statusFunc func(context.Context) []byte, bootFunc func(context.Context, string) []byte, shutdownFunc func(context.Context, string) []byte, nodesFunc func(context.Context) []byte, nodeFunc func(context.Context, string) []byte) {
-	s.StatusFunc = statusFunc
-	s.BootFunc = bootFunc
-	s.ShutdownFunc = shutdownFunc
-	s.NodesFunc = nodesFunc
-	s.NodeFunc = nodeFunc
-}
+// func (s *Server) SetFunc(statusFunc func(context.Context) []byte, bootFunc func(context.Context, string) []byte, shutdownFunc func(context.Context, string) []byte, nodesFunc func(context.Context) []byte, nodeFunc func(context.Context, string) []byte) {
+// 	s.StatusFunc = statusFunc
+// 	s.BootFunc = bootFunc
+// 	s.ShutdownFunc = shutdownFunc
+// 	s.NodesFunc = nodesFunc
+// 	s.NodeFunc = nodeFunc
+// }
 
 func (s *Server) Init() {
 	s.router = chi.NewRouter()
 	s.router.Use(middleware.Logger)
+	s.router.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		s.writeRouteError(w, http.StatusNotFound, "route not found")
+	})
+	s.router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+		s.writeRouteError(w, http.StatusMethodNotAllowed, "method not allowed")
+	})
 	s.router.Get("/hello", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hi!\n"))
 	})
@@ -65,57 +82,58 @@ func (s *Server) Run(ctx context.Context) {
 	}
 }
 
-func (s *Server) handleListNodes(w http.ResponseWriter, r *http.Request) {
+func (s *Server) WriteResponse(response any, err error, w http.ResponseWriter) {
+
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	errCode := utils.ParseErrCode(err)
+	w.WriteHeader(errCode)
+	jsonResponse := utils.ToJSON(response)
 
-	slog.Info("list request")
-	response := s.NodesFunc(r.Context())
+	w.Write(jsonResponse)
+}
 
-	w.Write(response)
+func (s *Server) writeRouteError(w http.ResponseWriter, code int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	w.Write(utils.ToJSON(struct {
+		Status  bool   `json:"status"`
+		Message string `json:"message"`
+	}{false, message}))
+}
+func (s *Server) handleListNodes(w http.ResponseWriter, r *http.Request) {
+
+	response, err := s.backend.ListNodes(r.Context())
+
+	s.WriteResponse(response, err, w)
 }
 
 func (s *Server) handleGetNode(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
 
 	name := chi.URLParam(r, "name")
-	slog.Info("info request", "node", name)
-	response := s.NodeFunc(r.Context(), name)
+	response, err := s.backend.GetNode(r.Context(), name)
+	s.WriteResponse(response, err, w)
 
-	w.Write(response)
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
 
-	slog.Info("status request")
-	response := s.StatusFunc(r.Context())
+	response, err := s.backend.Status(r.Context())
+	s.WriteResponse(response, err, w)
 
-	w.Write(response)
 }
 
 func (s *Server) handleBoot(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
 
 	name := chi.URLParam(r, "name")
-
-	slog.Info("boot request", "node", name)
-	response := s.BootFunc(r.Context(), name)
-
-	w.Write(response)
+	response, err := s.backend.Boot(r.Context(), name)
+	s.WriteResponse(response, err, w)
 }
 
 func (s *Server) handleShutdown(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
 
 	name := chi.URLParam(r, "name")
 
-	slog.Info("shutdown request", "node", name)
-	response := s.ShutdownFunc(r.Context(), name)
+	response, err := s.backend.Shutdown(r.Context(), name)
+	s.WriteResponse(response, err, w)
 
-	w.Write(response)
 }

@@ -2,10 +2,13 @@ package utils
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
+	"net/http"
 	"time"
 
 	probing "github.com/prometheus-community/pro-bing"
+	"github.com/pspiagicw/homelabctl/apierr"
 )
 
 func Ping(address string) bool {
@@ -35,4 +38,20 @@ func ToJSON(data any) []byte {
 	}
 
 	return content
+}
+
+func ParseErrCode(err error) int {
+	switch {
+	case err == nil:
+		return http.StatusOK
+	case errors.Is(err, apierr.ErrNotFound):
+		return http.StatusNotFound
+	case errors.Is(err, apierr.ErrConflict):
+		return http.StatusConflict
+	case errors.Is(err, apierr.ErrUnavailable):
+		return http.StatusServiceUnavailable
+	case errors.Is(err, apierr.ErrUpstream):
+		return http.StatusBadGateway
+	}
+	return http.StatusInternalServerError
 }

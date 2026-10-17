@@ -2,14 +2,15 @@ package daemon
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 
 	"github.com/pspiagicw/homelabctl/api"
+	"github.com/pspiagicw/homelabctl/apierr"
 	"github.com/pspiagicw/homelabctl/config"
 	"github.com/pspiagicw/homelabctl/node"
 	"github.com/pspiagicw/homelabctl/sentinel"
-	"github.com/pspiagicw/homelabctl/utils"
 )
 
 type Orchestrator struct {
@@ -29,11 +30,11 @@ type Response struct {
 }
 
 func NewOrchestrator(cfg *config.Config) *Orchestrator {
-	o := &Orchestrator{
-		Registry: node.NewRegistry(cfg),
-		Sentinel: sentinel.NewSentinel(cfg),
-		Server:   api.NewServer(cfg),
-	}
+	o := &Orchestrator{}
+	o.Registry = node.NewRegistry(cfg)
+	o.Sentinel = sentinel.NewSentinel(cfg)
+	// Server also owns orchestrator!
+	o.Server = api.NewServer(cfg, o)
 
 	o.Sentinel.SetFunc(
 		func(ctx context.Context) {
@@ -44,28 +45,28 @@ func NewOrchestrator(cfg *config.Config) *Orchestrator {
 		},
 	)
 
-	o.Server.SetFunc(
-		func(ctx context.Context) []byte {
-			return utils.ToJSON(o.Status(ctx))
-		},
-		func(ctx context.Context, name string) []byte {
-			return utils.ToJSON(o.Boot(ctx, name))
-		},
-		func(ctx context.Context, name string) []byte {
-			return utils.ToJSON(o.Shutdown(ctx, name))
-		},
-		func(ctx context.Context) []byte {
-			return utils.ToJSON(o.RegistryStatus(ctx))
-		},
-		func(ctx context.Context, name string) []byte {
-			return utils.ToJSON(o.NodeStatus(ctx, name))
-		},
-	)
+	// o.Server.SetFunc(
+	// 	func(ctx context.Context) []byte {
+	// 		return utils.ToJSON(o.Status(ctx))
+	// 	},
+	// 	func(ctx context.Context, name string) []byte {
+	// 		return utils.ToJSON(o.Boot(ctx, name))
+	// 	},
+	// 	func(ctx context.Context, name string) []byte {
+	// 		return utils.ToJSON(o.Shutdown(ctx, name))
+	// 	},
+	// 	func(ctx context.Context) []byte {
+	// 		return utils.ToJSON(o.RegistryStatus(ctx))
+	// 	},
+	// 	func(ctx context.Context, name string) []byte {
+	// 		return utils.ToJSON(o.NodeStatus(ctx, name))
+	// 	},
+	// )
 
 	return o
 }
 
-func (o *Orchestrator) NodeStatus(ctx context.Context, name string) any {
+func (o *Orchestrator) GetNode(ctx context.Context, name string) (any, error) {
 	n, err := o.Registry.NodeStatus(ctx, name)
 
 	message := ""
@@ -80,22 +81,22 @@ func (o *Orchestrator) NodeStatus(ctx context.Context, name string) any {
 		err == nil,
 		message,
 		n,
-	}
+	}, err
 }
 
-func (o *Orchestrator) RegistryStatus(ctx context.Context) *node.RegistryStatus {
+func (o *Orchestrator) ListNodes(ctx context.Context) (any, error) {
 	r := o.Registry.Status()
 
-	return r
+	return r, nil
 }
-func (o *Orchestrator) Status(ctx context.Context) *DaemonStatus {
+func (o *Orchestrator) Status(ctx context.Context) (any, error) {
 	s := o.Sentinel.Status()
 	r := o.Registry.Status()
 	d := &DaemonStatus{
 		Sentinel: s,
 		Registry: r,
 	}
-	return d
+	return d, nil
 }
 
 // TODO: Implement this kkkjj
@@ -122,7 +123,7 @@ func (o *Orchestrator) ShutdownAll(ctx context.Context) {
 	o.Registry.ShutdownAll(ctx)
 }
 
-func (o *Orchestrator) Shutdown(ctx context.Context, name string) any {
+func (o *Orchestrator) Shutdown(ctx context.Context, name string) (any, error) {
 	err := o.Registry.Shutdown(ctx, name)
 
 	message := ""
@@ -133,17 +134,25 @@ func (o *Orchestrator) Shutdown(ctx context.Context, name string) any {
 	return Response{
 		err == nil,
 		message,
-	}
+	}, err
 
 }
 
 // TODO: Check if we need to send only true/false or node info too!
-func (o *Orchestrator) Boot(ctx context.Context, name string) any {
+func (o *Orchestrator) Boot(ctx context.Context, name string) (any, error) {
+	if _, ok := o.Registry.Nodes[name]; !ok {
+		err := fmt.Errorf("boot requested on invalid node; node: %s; %w", name, apierr.ErrNotFound)
+		return Response{
+			false,
+			err.Error(),
+		}, err
+	}
+
 	if o.Sentinel.State != sentinel.Normal {
 		return Response{
 			false,
 			"sentinel currently offline; can't boot any machines.",
-		}
+		}, fmt.Errorf("sentinel currently offline; can't boot any machines; %w", apierr.ErrConflict)
 	}
 	err := o.Registry.Boot(ctx, name)
 
@@ -155,7 +164,7 @@ func (o *Orchestrator) Boot(ctx context.Context, name string) any {
 	return Response{
 		err == nil,
 		message,
-	}
+	}, err
 }
 
 func (o *Orchestrator) Start(ctx context.Context) {
