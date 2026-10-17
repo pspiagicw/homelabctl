@@ -30,6 +30,7 @@ nodes:
     address: 192.168.10.45
     mac: "aa:bb:cc:00:00:20"
     wait_after_boot: 180        # static delay before considered "ready"
+    wait_after_shutdown: 10     # static delay after shutdown before considering offline
     services:
       - jellyfin
       - immich
@@ -39,6 +40,7 @@ nodes:
     address: 192.168.10.43
     mac: "aa:bb:cc:00:00:21"
     wait_after_boot: 60
+    wait_after_shutdown: 5      # short shutdown wait time
     services:
       - proxmox-backup-server
       - borg-target

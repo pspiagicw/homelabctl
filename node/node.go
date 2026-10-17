@@ -32,15 +32,17 @@ const (
 
 // TODO: Implement services workflow
 type Node struct {
-	Name      string
-	cfg       config.NodeConfig
-	State     string
-	SSH       config.SSHConfig
-	LastSeen  time.Time
-	PingFunc  agents.Pinger
-	RunFunc   agents.Runner
-	WakeFunc  agents.WakeSender
-	AfterFunc agents.After
+	Name            string
+	cfg             config.NodeConfig
+	State           string
+	SSH             config.SSHConfig
+	LastSeen        time.Time
+	PingFunc        agents.Pinger
+	RunFunc         agents.Runner
+	WakeFunc        agents.WakeSender
+	AfterFunc       agents.After
+	BootTimeout     int
+	ShutdownTimeout int
 }
 
 type NodeStatus struct {
@@ -85,6 +87,14 @@ func NewNode(name string, cfg config.NodeConfig, ssh config.SSHConfig) *Node {
 	n.RunFunc = utils.SSHRun
 	n.WakeFunc = utils.Wake
 	n.AfterFunc = utils.After
+	
+	// Initialize timeouts - if ShutdownTimeout is not set, default to BootTimeout
+	n.BootTimeout = cfg.BootTimeout
+	if cfg.ShutdownTimeout == 0 {
+		n.ShutdownTimeout = cfg.BootTimeout
+	} else {
+		n.ShutdownTimeout = cfg.ShutdownTimeout
+	}
 
 	return n
 }
@@ -111,7 +121,7 @@ func (n *Node) IsReachable() {
 
 func (n *Node) FinishBooting() {
 	// timer := time.NewTimer(time.Duration(n.cfg.BootTimeout) * time.Second)
-	timer := n.AfterFunc(time.Duration(n.cfg.BootTimeout) * time.Second)
+	timer := n.AfterFunc(time.Duration(n.BootTimeout) * time.Second)
 	slog.Info("starting boot timer", "node", n.Name)
 	<-timer
 	slog.Info("boot timer complete", "node", n.Name)
@@ -121,7 +131,7 @@ func (n *Node) FinishBooting() {
 
 func (n *Node) FinishShutdown() {
 	// timer := time.NewTimer(time.Duration(n.cfg.BootTimeout) * time.Second)
-	timer := n.AfterFunc(time.Duration(n.cfg.BootTimeout) * time.Second)
+	timer := n.AfterFunc(time.Duration(n.ShutdownTimeout) * time.Second)
 	slog.Info("starting shutdown timer", "node", n.Name)
 	<-timer
 	slog.Info("shutdown timer complete", "node", n.Name)

@@ -45,9 +45,10 @@ type SentinelConfig struct {
 
 // TODO: Services per node, not implemented.
 type NodeConfig struct {
-	Address     string `yaml:"address"`
-	MAC         string `yaml:"mac"`
-	BootTimeout int    `yaml:"wait_after_boot"`
+	Address      string `yaml:"address"`
+	MAC          string `yaml:"mac"`
+	BootTimeout  int    `yaml:"wait_after_boot"`
+	ShutdownTimeout int `yaml:"wait_after_shutdown,omitempty"`
 }
 
 // profiles:
