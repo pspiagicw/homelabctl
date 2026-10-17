@@ -58,7 +58,7 @@ func (s *Server) Init() {
 	s.router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 		s.writeRouteError(w, http.StatusMethodNotAllowed, "method not allowed")
 	})
-	s.router.Get("/hello", func(w http.ResponseWriter, r *http.Request) {
+	s.router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hi!\n"))
 	})
 	s.router.Get("/status", s.handleStatus)
