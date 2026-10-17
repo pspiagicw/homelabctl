@@ -4,73 +4,89 @@ import (
 	"context"
 	"testing"
 
-	"github.com/pspiagicw/homelabctl/apierr"
 	"github.com/pspiagicw/homelabctl/config"
 )
 
-// Tests for Boot functionality - verify state transitions
-func TestNodeBoot(t *testing.T) {
-	tests := []struct {
-		name        string
-		initialState string
-		wantError   bool
-		wantState   string
-	}{
-		{
-			name:        "boot when node is off",
-			initialState: OFF,
-			wantError:   false,
-			wantState:   BOOTING,
-		},
-		{
-			name:        "skip boot when node is on",
-			initialState: ON,
-			wantError:   true,
-			wantState:   ON,
-		},
-		{
-			name:        "skip boot when state unknown",
-			initialState: UNKNOWN,
-			wantError:   true,
-			wantState:   UNKNOWN,
-		},
+// setupNodeWithMocks creates a test node with mocked dependencies
+func setupNodeWithMocks() *Node {
+	cfg := config.NodeConfig{
+		Address:       "192.168.1.100",
+		MAC:           "00:11:22:33:44:55",
+		BootTimeout:   30,
+		ShutdownTimeout: 60,
+	}
+	sshCfg := config.SSHConfig{
+		User:        "root",
+		IdentityFile: "/path/to/key",
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			cfg := config.NodeConfig{
-				Address:       "192.168.1.100",
-				MAC:           "00:11:22:33:44:55",
-				BootTimeout:   30,
-				ShutdownTimeout: 60,
-			}
-			sshCfg := config.SSHConfig{
-				User:        "root",
-				IdentityFile: "/path/to/key",
-			}
+	node := NewNode("test-node", cfg, sshCfg)
 
-			node := NewNode("test-node", cfg, sshCfg)
-			node.State = tc.initialState
+	// Setup default mocks
+	node.WakeFunc = func(mac string) error {
+		return nil // Always succeed for boot tests
+	}
+	
+	node.PingFunc = func(address string) bool {
+		return true // Default to reachable for most tests
+	}
+	
+	node.RunFunc = func(ctx context.Context, addr, cmd string, cfg config.SSHConfig) error {
+		return nil // Always succeed for shutdown tests
+	}
 
-			// Mock WakeFunc with a simple function that always succeeds
-			node.WakeFunc = func(mac string) error {
-				return nil
-			}
+	return node
+}
 
-			err := node.Boot(context.Background())
+// TestNodeBootWhenOff verifies boot succeeds when node is OFF 
+func TestNodeBootWhenOff(t *testing.T) {
+	node := setupNodeWithMocks()
+	node.State = OFF
 
-			if (err != nil) != tc.wantError {
-				t.Errorf("node.Boot() error = %v, wantErr %v", err, tc.wantError)
-			}
+	err := node.Boot(context.Background())
 
-			if node.State != tc.wantState {
-				t.Errorf("node.State = %s, want %s", node.State, tc.wantState)
-			}
-		})
+	if err != nil {
+		t.Errorf("node.Boot() error = %v, wantErr false", err)
+	}
+
+	if node.State != BOOTING {
+		t.Errorf("node.State = %s, want %s", node.State, BOOTING)
 	}
 }
 
-// Tests to ensure FinishBooting state transition happens in goroutine
+// TestNodeBootWhenOn verifies boot is skipped when node is ON
+func TestNodeBootWhenOn(t *testing.T) {
+	node := setupNodeWithMocks()
+	node.State = ON
+
+	err := node.Boot(context.Background())
+
+	if err == nil {
+		t.Errorf("node.Boot() error = %v, wantErr true", err)
+	}
+
+	if node.State != ON {
+		t.Errorf("node.State = %s, want %s", node.State, ON)
+	}
+}
+
+// TestNodeBootWhenUnknown verifies boot is skipped when state is UNKNOWN
+func TestNodeBootWhenUnknown(t *testing.T) {
+	node := setupNodeWithMocks()
+	node.State = UNKNOWN
+
+	err := node.Boot(context.Background())
+
+	if err == nil {
+		t.Errorf("node.Boot() error = %v, wantErr true", err)
+	}
+
+	if node.State != UNKNOWN {
+		t.Errorf("node.State = %s, want %s", node.State, UNKNOWN)
+	}
+}
+
+// TestNodeFinishBooting verifies timeout mechanism completes in goroutine
 func TestNodeFinishBooting(t *testing.T) {
 	cfg := config.NodeConfig{
 		Address:       "192.168.1.100",
@@ -105,77 +121,60 @@ func TestNodeFinishBooting(t *testing.T) {
 	}
 
 	t.Logf("FinishBooting completed, final state: %s", node.State)
-}
-
-// Tests for Shutdown functionality - verify state transitions  
-func TestNodeShutdown(t *testing.T) {
-	tests := []struct {
-		name        string
-		initialState string
-		wantError   bool
-		wantState   string
-	}{
-		{
-			name:        "shutdown when node is on",
-			initialState: ON,
-			wantError:   false,
-			wantState:   SHUTTING,
-		},
-		{
-			name:        "skip shutdown when node is off",
-			initialState: OFF,
-			wantError:   true,
-			wantState:   OFF,
-		},
-		{
-			name:        "skip shutdown when state unknown",
-			initialState: UNKNOWN,
-			wantError:   true,
-			wantState:   UNKNOWN,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			cfg := config.NodeConfig{
-				Address:       "192.168.1.100",
-				MAC:           "00:11:22:33:44:55",
-				BootTimeout:   30,
-				ShutdownTimeout: 60,
-			}
-
-			ctx := context.Background()
-			sshCfg := config.SSHConfig{
-				User:        "root",
-				IdentityFile: "/path/to/key",
-			}
-
-			node := NewNode("test-node", cfg, sshCfg)
-			node.State = tc.initialState
-
-			// Mock RunFunc to simulate command execution (may fail for some scenarios)
-			node.RunFunc = func(ctx context.Context, addr, cmd string, cfg config.SSHConfig) error {
-				// Simulate successful SSH run
-				if tc.initialState == OFF || tc.initialState == UNKNOWN {
-					return apierr.ErrConflict
-				}
-				return nil
-			}
-
-			err := node.Shutdown(ctx)
-
-			if (err != nil) != tc.wantError {
-				t.Errorf("node.Shutdown() error = %v, wantErr %v", err, tc.wantError)
-			}
-
-			if node.State != tc.wantState {
-				t.Errorf("node.State = %s, want %s", node.State, tc.wantState)
-			}
-		})
+	if node.State != ON {
+		t.Errorf("node.State = %s, want %s", node.State, ON)
 	}
 }
 
-// Tests to ensure FinishShutdown state transition happens in goroutine
+// TestNodeShutdownWhenOn verifies shutdown succeeds when node is ON
+func TestNodeShutdownWhenOn(t *testing.T) {
+	node := setupNodeWithMocks()
+	node.State = ON
+
+	err := node.Shutdown(context.Background())
+
+	if err != nil {
+		t.Errorf("node.Shutdown() error = %v, wantErr false", err)
+	}
+
+	if node.State != SHUTTING {
+		t.Errorf("node.State = %s, want %s", node.State, SHUTTING)
+	}
+}
+
+// TestNodeShutdownWhenOff verifies shutdown is skipped when node is OFF 
+func TestNodeShutdownWhenOff(t *testing.T) {
+	node := setupNodeWithMocks()
+	node.State = OFF
+
+	err := node.Shutdown(context.Background())
+
+	if err == nil {
+		t.Errorf("node.Shutdown() error = %v, wantErr true", err)
+	}
+
+	if node.State != OFF {
+		t.Errorf("node.State = %s, want %s", node.State, OFF)
+	}
+}
+
+// TestNodeShutdownWhenUnknown verifies shutdown is skipped when state is UNKNOWN
+func TestNodeShutdownWhenUnknown(t *testing.T) {
+	node := setupNodeWithMocks()
+	node.State = UNKNOWN
+
+	err := node.Shutdown(context.Background())
+
+	if err == nil {
+		t.Errorf("node.Shutdown() error = %v, wantErr true", err)
+	}
+
+	if node.State != UNKNOWN {
+		t.Errorf("node.State = %s, want %s", node.State, UNKNOWN)
+	}
+}
+
+// TestNodeFinishShutdown verifies shutdown timeout mechanism completes in goroutine
 func TestNodeFinishShutdown(t *testing.T) {
 	cfg := config.NodeConfig{
 		Address:       "192.168.1.100",
@@ -207,5 +206,9 @@ func TestNodeFinishShutdown(t *testing.T) {
 	select {
 	case <-done:
 		t.Logf("FinishShutdown completed after timeout, final state: %s", node.State)
+	}
+
+	if node.State != OFF {
+		t.Errorf("node.State = %s, want %s", node.State, OFF)
 	}
 }
