@@ -88,13 +88,9 @@ func NewNode(name string, cfg config.NodeConfig, ssh config.SSHConfig) *Node {
 	n.WakeFunc = utils.Wake
 	n.AfterFunc = utils.After
 	
-	// Initialize timeouts - if ShutdownTimeout is not set, default to BootTimeout
+	// Initialize timeouts - both must be explicitly set by config
 	n.BootTimeout = cfg.BootTimeout
-	if cfg.ShutdownTimeout == 0 {
-		n.ShutdownTimeout = cfg.BootTimeout
-	} else {
-		n.ShutdownTimeout = cfg.ShutdownTimeout
-	}
+	n.ShutdownTimeout = cfg.ShutdownTimeout
 
 	return n
 }

@@ -48,7 +48,7 @@ type NodeConfig struct {
 	Address      string `yaml:"address"`
 	MAC          string `yaml:"mac"`
 	BootTimeout  int    `yaml:"wait_after_boot"`
-	ShutdownTimeout int `yaml:"wait_after_shutdown,omitempty"`
+	ShutdownTimeout int `yaml:"wait_after_shutdown"`
 }
 
 // profiles:
