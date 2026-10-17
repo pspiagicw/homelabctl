@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/pspiagicw/homelabctl/apierr"
 	"github.com/pspiagicw/homelabctl/config"
 	"github.com/stretchr/testify/assert"
 )
@@ -23,6 +24,21 @@ func (f *fakeBackend) Boot(_ context.Context, _ string) (any, error) {
 }
 func (f *fakeBackend) Shutdown(_ context.Context, _ string) (any, error) {
 	return nil, nil
+}
+
+// Mock backend that returns errors for testing error cases
+type errorBackend struct{}
+
+func (e *errorBackend) Status(_ context.Context) (any, error)    { return nil, apierr.ErrUpstream }
+func (e *errorBackend) ListNodes(_ context.Context) (any, error)  { return nil, apierr.ErrNotFound }
+func (e *errorBackend) GetNode(_ context.Context, _ string) (any, error) {
+	return nil, apierr.ErrConflict
+}
+func (e *errorBackend) Boot(_ context.Context, _ string) (any, error) {
+	return nil, apierr.ErrUnavailable
+}
+func (e *errorBackend) Shutdown(_ context.Context, _ string) (any, error) {
+	return nil, apierr.ErrUpstream
 }
 
 func TestHealthEndpoint(t *testing.T) {
@@ -64,4 +80,213 @@ func TestStatusEndpoint(t *testing.T) {
 
 	// Check that we get a 200 status (since our fake backend returns success)
 	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestStatusEndpointWithError(t *testing.T) {
+	// Create a simple config (we don't need real values for this test)
+	cfg := &config.Config{}
+	
+	// Create server with error backend
+	server := NewServer(cfg, &errorBackend{})
+	server.Init()
+
+	// Create test request
+	req := httptest.NewRequest("GET", "/status", nil)
+	rec := httptest.NewRecorder()
+	
+	// Test the handler directly
+	server.Handler().ServeHTTP(rec, req)
+
+	// Check that we get an upstream error status (502)
+	assert.Equal(t, http.StatusBadGateway, rec.Code)
+}
+
+func TestListNodesEndpoint(t *testing.T) {
+	// Create a simple config (we don't need real values for this test)
+	cfg := &config.Config{}
+	
+	// Create server with fake backend
+	server := NewServer(cfg, &fakeBackend{})
+	server.Init()
+
+	// Create test request
+	req := httptest.NewRequest("GET", "/nodes", nil)
+	rec := httptest.NewRecorder()
+	
+	// Test the handler directly
+	server.Handler().ServeHTTP(rec, req)
+
+	// Check that we get a 200 status (since our fake backend returns success)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestListNodesEndpointWithError(t *testing.T) {
+	// Create a simple config (we don't need real values for this test)
+	cfg := &config.Config{}
+	
+	// Create server with error backend
+	server := NewServer(cfg, &errorBackend{})
+	server.Init()
+
+	// Create test request
+	req := httptest.NewRequest("GET", "/nodes", nil)
+	rec := httptest.NewRecorder()
+	
+	// Test the handler directly
+	server.Handler().ServeHTTP(rec, req)
+
+	// Check that we get a not found status (404)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestGetNodeEndpoint(t *testing.T) {
+	// Create a simple config (we don't need real values for this test)
+	cfg := &config.Config{}
+	
+	// Create server with fake backend
+	server := NewServer(cfg, &fakeBackend{})
+	server.Init()
+
+	// Create test request
+	req := httptest.NewRequest("GET", "/nodes/test-node", nil)
+	rec := httptest.NewRecorder()
+	
+	// Test the handler directly
+	server.Handler().ServeHTTP(rec, req)
+
+	// Check that we get a 200 status (since our fake backend returns success)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestGetNodeEndpointWithError(t *testing.T) {
+	// Create a simple config (we don't need real values for this test)
+	cfg := &config.Config{}
+	
+	// Create server with error backend
+	server := NewServer(cfg, &errorBackend{})
+	server.Init()
+
+	// Create test request
+	req := httptest.NewRequest("GET", "/nodes/test-node", nil)
+	rec := httptest.NewRecorder()
+	
+	// Test the handler directly
+	server.Handler().ServeHTTP(rec, req)
+
+	// Check that we get a conflict status (409)
+	assert.Equal(t, http.StatusConflict, rec.Code)
+}
+
+func TestBootEndpoint(t *testing.T) {
+	// Create a simple config (we don't need real values for this test)
+	cfg := &config.Config{}
+	
+	// Create server with fake backend
+	server := NewServer(cfg, &fakeBackend{})
+	server.Init()
+
+	// Create test request
+	req := httptest.NewRequest("POST", "/nodes/test-node/boot", nil)
+	rec := httptest.NewRecorder()
+	
+	// Test the handler directly
+	server.Handler().ServeHTTP(rec, req)
+
+	// Check that we get a 200 status (since our fake backend returns success)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestBootEndpointWithError(t *testing.T) {
+	// Create a simple config (we don't need real values for this test)
+	cfg := &config.Config{}
+	
+	// Create server with error backend
+	server := NewServer(cfg, &errorBackend{})
+	server.Init()
+
+	// Create test request
+	req := httptest.NewRequest("POST", "/nodes/test-node/boot", nil)
+	rec := httptest.NewRecorder()
+	
+	// Test the handler directly
+	server.Handler().ServeHTTP(rec, req)
+
+	// Check that we get an unavailable status (503)
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+}
+
+func TestShutdownEndpoint(t *testing.T) {
+	// Create a simple config (we don't need real values for this test)
+	cfg := &config.Config{}
+	
+	// Create server with fake backend
+	server := NewServer(cfg, &fakeBackend{})
+	server.Init()
+
+	// Create test request
+	req := httptest.NewRequest("POST", "/nodes/test-node/shutdown", nil)
+	rec := httptest.NewRecorder()
+	
+	// Test the handler directly
+	server.Handler().ServeHTTP(rec, req)
+
+	// Check that we get a 200 status (since our fake backend returns success)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestShutdownEndpointWithError(t *testing.T) {
+	// Create a simple config (we don't need real values for this test)
+	cfg := &config.Config{}
+	
+	// Create server with error backend
+	server := NewServer(cfg, &errorBackend{})
+	server.Init()
+
+	// Create test request
+	req := httptest.NewRequest("POST", "/nodes/test-node/shutdown", nil)
+	rec := httptest.NewRecorder()
+	
+	// Test the handler directly
+	server.Handler().ServeHTTP(rec, req)
+
+	// Check that we get an upstream error status (502)
+	assert.Equal(t, http.StatusBadGateway, rec.Code)
+}
+
+func TestRouteNotFound(t *testing.T) {
+	// Create a simple config (we don't need real values for this test)
+	cfg := &config.Config{}
+	
+	// Create server with fake backend
+	server := NewServer(cfg, &fakeBackend{})
+	server.Init()
+
+	// Create test request to non-existent route
+	req := httptest.NewRequest("GET", "/nonexistent", nil)
+	rec := httptest.NewRecorder()
+	
+	// Test the handler directly
+	server.Handler().ServeHTTP(rec, req)
+
+	// Check that we get a 404 status 
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestMethodNotAllowed(t *testing.T) {
+	// Create a simple config (we don't need real values for this test)
+	cfg := &config.Config{}
+	
+	// Create server with fake backend
+	server := NewServer(cfg, &fakeBackend{})
+	server.Init()
+
+	// Create test request using POST on GET-only endpoint
+	req := httptest.NewRequest("POST", "/health", nil)
+	rec := httptest.NewRecorder()
+	
+	// Test the handler directly
+	server.Handler().ServeHTTP(rec, req)
+
+	// Check that we get a 405 status 
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
 }
