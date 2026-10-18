@@ -187,6 +187,19 @@ main { min-width: 0; }
 .sentinel { margin-bottom: 16px; }
 .sentinel[data-sentinel="Normal"] { border-left: 4px solid var(--ok-fg); }
 .sentinel:not([data-sentinel="Normal"]) { border-left: 4px solid var(--warn-fg); }
+.mains-up { color: var(--ok-fg); }
+.mains-warn { color: var(--warn-fg); }
+.mains-down { color: var(--error-fg); }
+.cursor {
+	margin-left: 2px;
+	color: var(--muted);
+	animation: blink 1.1s steps(1) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+	.cursor { animation: none; }
+}
+
 @media (min-width: 720px) {
 	.sentinel .meta { grid-template-columns: max-content 1fr max-content 1fr; }
 }
