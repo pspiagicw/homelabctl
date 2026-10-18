@@ -11,6 +11,7 @@ import (
 	"github.com/pspiagicw/homelabctl/config"
 	"github.com/pspiagicw/homelabctl/node"
 	"github.com/pspiagicw/homelabctl/sentinel"
+	"github.com/pspiagicw/homelabctl/web"
 )
 
 type Orchestrator struct {
@@ -35,6 +36,7 @@ func NewOrchestrator(cfg *config.Config) *Orchestrator {
 	o.Sentinel = sentinel.NewSentinel(cfg)
 	// Server also owns orchestrator!
 	o.Server = api.NewServer(cfg, o)
+	o.Server.UI = web.New(o).Handler()
 
 	o.Sentinel.SetFunc(
 		func(ctx context.Context) {
@@ -64,6 +66,14 @@ func (o *Orchestrator) GetNode(ctx context.Context, name string) (any, error) {
 		message,
 		n,
 	}, err
+}
+
+func (o *Orchestrator) NodeStates() *node.RegistryStatus {
+	return o.Registry.Status()
+}
+
+func (o *Orchestrator) SentinelState() *sentinel.SentinelStatus {
+	return o.Sentinel.Status()
 }
 
 func (o *Orchestrator) ListNodes(ctx context.Context) (any, error) {

@@ -25,6 +25,9 @@ type Server struct {
 	router  chi.Router
 	backend Backend
 
+	// UI is the web interface, mounted at /ui when set.
+	UI http.Handler
+
 	// StatusFunc   func(context.Context) []byte
 	// BootFunc     func(context.Context, string) []byte
 	// ShutdownFunc func(context.Context, string) []byte
@@ -69,6 +72,13 @@ func (s *Server) Init() {
 		r.Post("/{name}/boot", s.handleBoot)
 		r.Post("/{name}/shutdown", s.handleShutdown)
 	})
+
+	if s.UI != nil {
+		s.router.Mount("/ui", s.UI)
+		s.router.Get("/", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/ui/", http.StatusFound)
+		})
+	}
 
 	slog.Info("server initialized!")
 }
