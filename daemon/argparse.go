@@ -14,9 +14,10 @@ type Context struct {
 }
 
 var Daemon struct {
-	LogLevel  string `help:"Set logging verbosity (debug, info, warn, error)" default:"info"`
-	Config    string `help:"Path to config file (overrides default resolution)"`
-	LogFormat string `help:"log output format: text or json" default:"text"`
+	LogLevel  string           `help:"Set logging verbosity (debug, info, warn, error)" default:"info"`
+	Config    string           `help:"Path to config file (overrides default resolution)"`
+	LogFormat string           `help:"log output format: text or json" default:"text"`
+	Version   kong.VersionFlag `help:"Print version information and exit"`
 }
 
 func Run(version version.Info) {
@@ -43,7 +44,7 @@ func InitLogger() {
 }
 
 func Parse() {
-	kong.Parse(&Daemon)
+	kong.Parse(&Daemon, kong.Vars{"version": "homelabctld " + version.String()})
 }
 
 func ParseConfig(configPath string) *config.Config {

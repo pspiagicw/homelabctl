@@ -9,9 +9,9 @@ VERSION     := $(shell git describe --tags --dirty --always 2>/dev/null || echo 
 COMMIT      := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
 BUILD_DATE  := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 
-LDFLAGS     := -X '$(MODULE)/pkg/version.Version=$(VERSION)' \
-               -X '$(MODULE)/pkg/version.Commit=$(COMMIT)' \
-               -X '$(MODULE)/pkg/version.BuildDate=$(BUILD_DATE)'
+LDFLAGS     := -X '$(MODULE)/version.Version=$(VERSION)' \
+               -X '$(MODULE)/version.Commit=$(COMMIT)' \
+               -X '$(MODULE)/version.BuildDate=$(BUILD_DATE)'
 
 GO          := go
 GOFLAGS     :=
