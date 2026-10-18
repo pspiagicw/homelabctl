@@ -5,16 +5,35 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<meta name="htmx-config" content='{"responseHandling":[{"code":"204","swap":false},{"code":"...","swap":true}]}'>
 	<title>homelabctl</title>
+	<link rel="preload" href="/ui/static/jetbrains-mono-400.woff2" as="font" type="font/woff2" crossorigin>
 	<link rel="stylesheet" href="/ui/static/style.css">
 	<script src="/ui/static/htmx.min.js"></script>
+	<script src="/ui/static/ui.js" defer></script>
 </head>
 <body>
 	<header class="app-bar">
-		<h1>homelabctl</h1>
+		<div class="app-bar-inner">
+			<h1><span class="prompt">~$</span> homelabctl</h1>
+			<span class="updated">synced <span id="updated">--:--:--</span></span>
+		</div>
 	</header>
-	<main id="panel" hx-get="/ui/nodes" hx-trigger="every 5s">
-		{{template "panel" .}}
-	</main>
+	<div class="layout">
+		<main id="panel" hx-get="/ui/nodes" hx-trigger="every 5s">
+			{{template "panel" .}}
+		</main>
+		<aside class="card events" aria-label="Event history">
+			<header class="events-head">
+				<div>
+					<span class="label">events</span>
+					<h2>history <span class="events-count" id="event-count">0</span></h2>
+				</div>
+				<button class="btn-text" id="event-clear" type="button">clear</button>
+			</header>
+			<ol class="event-log" id="event-log"></ol>
+			<p class="events-empty" id="event-empty">No actions yet. Boot and shutdown results are kept here.</p>
+		</aside>
+	</div>
+	<footer class="footer">refreshes every 5s · times are relative to this device · event history is stored in this browser</footer>
 </body>
 </html>
 {{end}}

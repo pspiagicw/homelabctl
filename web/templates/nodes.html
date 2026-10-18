@@ -1,36 +1,89 @@
 {{define "panel"}}
-<section class="sentinel {{if eq .Sentinel.State "Normal"}}sentinel-ok{{else}}sentinel-warn{{end}}">
-	<span class="sentinel-label">Sentinel</span>
-	<strong>{{.Sentinel.State}}</strong>
-	<span class="sentinel-seen">last seen {{seen .Sentinel.LastSeen}}</span>
+{{$normal := eq .Sentinel.State "Normal"}}
+
+<section class="card sentinel" data-sentinel="{{.Sentinel.State}}">
+	<header class="card-head">
+		<div>
+			<span class="label">sentinel</span>
+			<h2>power watchdog</h2>
+		</div>
+		<span class="chip {{if $normal}}chip-on{{else}}chip-warn{{end}}">{{.Sentinel.State}}</span>
+	</header>
+
+	<p class="desc">
+		{{if eq .Sentinel.State "Normal"}}Mains power OK. The sentinel answers ping, so boots are allowed.
+		{{else if eq .Sentinel.State "OutageDetected"}}The sentinel stopped answering. Waiting out the outage grace period before shutting nodes down.
+		{{else if eq .Sentinel.State "OutageConfirmed"}}Outage confirmed. Running nodes are shut down while the sentinel is unreachable.
+		{{else if eq .Sentinel.State "Restoring"}}The sentinel is back. Waiting out the restore grace period to make sure power is stable.
+		{{else if eq .Sentinel.State "Restored"}}Power restored. Returning to normal on the next check.
+		{{else}}Sentinel state not known yet.{{end}}
+	</p>
+
+	<dl class="meta">
+		<dt>last seen</dt>
+		<dd>{{template "time" .Sentinel.LastSeen}}</dd>
+		<dt>state since</dt>
+		<dd>{{if .Sentinel.LastTransitioned.IsZero}}daemon start{{else}}{{template "time" .Sentinel.LastTransitioned}}{{end}}</dd>
+		<dt>boot</dt>
+		<dd class="{{if $normal}}ok{{else}}blocked{{end}}">{{if $normal}}allowed{{else}}blocked until Normal{{end}}</dd>
+		<dt>shutdown</dt>
+		<dd class="ok">always allowed</dd>
+	</dl>
+</section>
+
+<section class="summary" aria-label="Node summary">
+	<span><b id="count-total">{{len .Nodes}}</b> nodes</span>
+	<span class="dot dot-on"><b id="count-on">-</b> on</span>
+	<span class="dot dot-off"><b id="count-off">-</b> off</span>
+	<span class="dot dot-busy"><b id="count-busy">-</b> transitioning</span>
 </section>
 
 {{with .Message}}
-<div class="snack{{if $.Failed}} snack-error{{end}}" role="status">{{.}}</div>
+{{/* Read by ui.js into the event history; not shown inline. */}}
+<div class="snack{{if $.Failed}} snack-error{{end}}" data-message="{{.}}" data-failed="{{$.Failed}}" hidden></div>
 {{end}}
 
 <section class="nodes">
 	{{range .Nodes}}
-	<article class="card">
+	<article class="card node" data-state="{{.PowerState}}">
 		<header class="card-head">
-			<h2>{{.Name}}</h2>
+			<div>
+				<span class="label">node</span>
+				<h2>{{.Name}}</h2>
+			</div>
 			<span class="chip chip-{{.PowerState}}">{{.PowerState}}</span>
 		</header>
-		<dl class="card-meta">
-			<dt>Address</dt><dd>{{.Address}}</dd>
-			<dt>Last seen</dt><dd>{{seen .LastSeen}}</dd>
+
+		<p class="desc">
+			{{if eq .PowerState "on"}}Answering ping.
+			{{else if eq .PowerState "off"}}No ping reply. Boot sends a Wake-on-LAN packet.
+			{{else if eq .PowerState "booting"}}Wake-on-LAN sent. Waiting for the boot timer, then pinging.
+			{{else if eq .PowerState "shutting"}}Shutdown sent over SSH. Waiting for the shutdown timer, then pinging.
+			{{else}}Not checked yet.{{end}}
+		</p>
+
+		<dl class="meta">
+			<dt>address</dt>
+			<dd><code>{{.Address}}</code></dd>
+			<dt>last seen</dt>
+			<dd>{{template "time" .LastSeen}}</dd>
+			<dt>ping</dt>
+			<dd class="{{if eq .PowerState "on"}}ok{{else if busy .PowerState}}pending{{else}}blocked{{end}}">
+				{{if eq .PowerState "on"}}reachable{{else if busy .PowerState}}pending{{else}}no reply{{end}}
+			</dd>
 		</dl>
-		<div class="card-actions">
+
+		<div class="actions">
 			<button class="btn btn-boot"
 				hx-post="/ui/nodes/{{.Name}}/boot" hx-target="#panel" hx-disabled-elt="this"
-				{{if busy .PowerState}}disabled{{end}}>
+				{{if busy .PowerState}}title="{{.Name}} is {{.PowerState}}" disabled{{else if not $normal}}title="Boot is blocked while the sentinel is not Normal" disabled{{end}}>
 				<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
 				Boot
 			</button>
 			<button class="btn btn-shutdown"
 				hx-post="/ui/nodes/{{.Name}}/shutdown" hx-target="#panel" hx-disabled-elt="this"
 				hx-confirm="Shut down {{.Name}}?"
-				{{if busy .PowerState}}disabled{{end}}>
+				{{if busy .PowerState}}title="{{.Name}} is {{.PowerState}}" disabled{{end}}>
 				<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3h-2v10h2V3zm4.83 2.17-1.42 1.42A6.98 6.98 0 0 1 19 12a7 7 0 0 1-14 0c0-2.19 1.01-4.14 2.58-5.42L6.17 5.17A8.96 8.96 0 0 0 3 12a9 9 0 0 0 18 0c0-2.74-1.23-5.18-3.17-6.83z"/></svg>
 				Shut down
 			</button>
@@ -41,3 +94,5 @@
 	{{end}}
 </section>
 {{end}}
+
+{{define "time"}}{{if .IsZero}}<span class="never">never</span>{{else}}<time datetime="{{.Format "2006-01-02T15:04:05Z07:00"}}" title="{{seen .}}">{{seen .}}</time>{{end}}{{end}}
