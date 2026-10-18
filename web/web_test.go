@@ -106,12 +106,28 @@ func TestBusyNodeButtonsDisabled(t *testing.T) {
 	assert.Regexp(t, disabledAttr, rec.Body.String())
 }
 
-func TestIdleNodeButtonsEnabled(t *testing.T) {
+// bootDisabled / shutdownDisabled match a disabled boot or shutdown button.
+var (
+	bootDisabled     = regexp.MustCompile(`class="btn btn-boot"[^>]*\sdisabled>`)
+	shutdownDisabled = regexp.MustCompile(`class="btn btn-shutdown"[^>]*\sdisabled>`)
+)
+
+func TestOnNodeBootDisabled(t *testing.T) {
 	_, h := setupUI(node.ON)
 
 	rec := serve(h, http.MethodGet, "/nodes")
 
-	assert.NotRegexp(t, disabledAttr, rec.Body.String())
+	assert.Regexp(t, bootDisabled, rec.Body.String())
+	assert.NotRegexp(t, shutdownDisabled, rec.Body.String())
+}
+
+func TestOffNodeShutdownDisabled(t *testing.T) {
+	_, h := setupUI(node.OFF)
+
+	rec := serve(h, http.MethodGet, "/nodes")
+
+	assert.Regexp(t, shutdownDisabled, rec.Body.String())
+	assert.NotRegexp(t, bootDisabled, rec.Body.String())
 }
 
 func TestStaticAssets(t *testing.T) {
