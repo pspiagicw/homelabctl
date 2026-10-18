@@ -133,7 +133,7 @@ func TestOffNodeShutdownDisabled(t *testing.T) {
 func TestStaticAssets(t *testing.T) {
 	_, h := setupUI(node.ON)
 
-	for _, path := range []string{"/static/style.css", "/static/htmx.min.js"} {
+	for _, path := range []string{"/static/style.css", "/static/htmx.min.js", "/static/ui.js", "/static/favicon.svg"} {
 		rec := serve(h, http.MethodGet, path)
 		assert.Equal(t, http.StatusOK, rec.Code, path)
 	}
