@@ -42,6 +42,9 @@ func setupNodeWithMocks() *Node {
 func TestNodeBootWhenOff(t *testing.T) {
 	node := setupNodeWithMocks()
 	node.State = OFF
+	node.PingFunc = func(address string) bool {
+		return false
+	}
 
 	err := node.Boot(context.Background())
 
@@ -70,10 +73,14 @@ func TestNodeBootWhenOn(t *testing.T) {
 	}
 }
 
-// TestNodeBootWhenUnknown verifies boot is skipped when state is UNKNOWN
-func TestNodeBootWhenUnknown(t *testing.T) {
+// TestNodeBootWhenBooting verifies boot is skipped, without a ping, while already BOOTING
+func TestNodeBootWhenBooting(t *testing.T) {
 	node := setupNodeWithMocks()
-	node.State = UNKNOWN
+	node.State = BOOTING
+	node.PingFunc = func(address string) bool {
+		t.Errorf("PingFunc called while BOOTING")
+		return true
+	}
 
 	err := node.Boot(context.Background())
 
@@ -81,8 +88,46 @@ func TestNodeBootWhenUnknown(t *testing.T) {
 		t.Errorf("node.Boot() error = %v, wantErr true", err)
 	}
 
-	if node.State != UNKNOWN {
-		t.Errorf("node.State = %s, want %s", node.State, UNKNOWN)
+	if node.State != BOOTING {
+		t.Errorf("node.State = %s, want %s", node.State, BOOTING)
+	}
+}
+
+// TestNodeBootWhenUnknownAndOff verifies an UNKNOWN state is resolved by ping before booting
+func TestNodeBootWhenUnknownAndOff(t *testing.T) {
+	node := setupNodeWithMocks()
+	node.State = UNKNOWN
+	node.PingFunc = func(address string) bool {
+		return false
+	}
+
+	err := node.Boot(context.Background())
+
+	if err != nil {
+		t.Errorf("node.Boot() error = %v, wantErr false", err)
+	}
+
+	if node.State != BOOTING {
+		t.Errorf("node.State = %s, want %s", node.State, BOOTING)
+	}
+}
+
+// TestNodeBootWhenStaleOn verifies boot proceeds when a recorded ON node is actually off
+func TestNodeBootWhenStaleOn(t *testing.T) {
+	node := setupNodeWithMocks()
+	node.State = ON
+	node.PingFunc = func(address string) bool {
+		return false
+	}
+
+	err := node.Boot(context.Background())
+
+	if err != nil {
+		t.Errorf("node.Boot() error = %v, wantErr false", err)
+	}
+
+	if node.State != BOOTING {
+		t.Errorf("node.State = %s, want %s", node.State, BOOTING)
 	}
 }
 
@@ -146,6 +191,9 @@ func TestNodeShutdownWhenOn(t *testing.T) {
 func TestNodeShutdownWhenOff(t *testing.T) {
 	node := setupNodeWithMocks()
 	node.State = OFF
+	node.PingFunc = func(address string) bool {
+		return false
+	}
 
 	err := node.Shutdown(context.Background())
 
@@ -158,10 +206,14 @@ func TestNodeShutdownWhenOff(t *testing.T) {
 	}
 }
 
-// TestNodeShutdownWhenUnknown verifies shutdown is skipped when state is UNKNOWN
-func TestNodeShutdownWhenUnknown(t *testing.T) {
+// TestNodeShutdownWhenShutting verifies shutdown is skipped, without a ping, while already SHUTTING
+func TestNodeShutdownWhenShutting(t *testing.T) {
 	node := setupNodeWithMocks()
-	node.State = UNKNOWN
+	node.State = SHUTTING
+	node.PingFunc = func(address string) bool {
+		t.Errorf("PingFunc called while SHUTTING")
+		return false
+	}
 
 	err := node.Shutdown(context.Background())
 
@@ -169,8 +221,27 @@ func TestNodeShutdownWhenUnknown(t *testing.T) {
 		t.Errorf("node.Shutdown() error = %v, wantErr true", err)
 	}
 
-	if node.State != UNKNOWN {
-		t.Errorf("node.State = %s, want %s", node.State, UNKNOWN)
+	if node.State != SHUTTING {
+		t.Errorf("node.State = %s, want %s", node.State, SHUTTING)
+	}
+}
+
+// TestNodeShutdownWhenStaleOff verifies shutdown proceeds when a recorded OFF node is actually on
+func TestNodeShutdownWhenStaleOff(t *testing.T) {
+	node := setupNodeWithMocks()
+	node.State = OFF
+	node.PingFunc = func(address string) bool {
+		return true
+	}
+
+	err := node.Shutdown(context.Background())
+
+	if err != nil {
+		t.Errorf("node.Shutdown() error = %v, wantErr false", err)
+	}
+
+	if node.State != SHUTTING {
+		t.Errorf("node.State = %s, want %s", node.State, SHUTTING)
 	}
 }
 

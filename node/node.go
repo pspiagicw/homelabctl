@@ -115,6 +115,16 @@ func (n *Node) IsReachable() {
 	}
 }
 
+// refresh re-pings the node so Boot/Shutdown act on live state rather than
+// the last recorded one. Transitional states are left alone; their timers
+// (FinishBooting/FinishShutdown) resolve them.
+func (n *Node) refresh() {
+	if n.State == BOOTING || n.State == SHUTTING {
+		return
+	}
+	n.IsReachable()
+}
+
 func (n *Node) FinishBooting() {
 	// timer := time.NewTimer(time.Duration(n.cfg.BootTimeout) * time.Second)
 	timer := n.AfterFunc(time.Duration(n.BootTimeout) * time.Second)
@@ -135,6 +145,8 @@ func (n *Node) FinishShutdown() {
 }
 
 func (n *Node) Boot(ctx context.Context) error {
+	n.refresh()
+
 	slog.Info("sending magic packet", "node", n.Name, "mac", n.cfg.MAC, "address", n.cfg.Address)
 
 	if n.State == ON {
@@ -162,6 +174,8 @@ func (n *Node) Boot(ctx context.Context) error {
 }
 
 func (n *Node) Shutdown(ctx context.Context) error {
+	n.refresh()
+
 	// Skip if the host is already off.
 	if n.State == OFF {
 		slog.Info("node offline, no need for shutdown.", "node", n.Name)
