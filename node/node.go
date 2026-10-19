@@ -49,6 +49,7 @@ type NodeStatus struct {
 	PowerState string    `json:"power_state"`
 	LastSeen   time.Time `json:"last_seen"`
 	Address    string    `json:"address"`
+	Unmanaged  bool      `json:"unmanaged"`
 }
 
 type DetailedStatus struct {
@@ -62,8 +63,14 @@ func (n *Node) Status() *NodeStatus {
 		PowerState: n.State,
 		Address:    n.cfg.Address,
 		LastSeen:   n.LastSeen,
+		Unmanaged:  n.cfg.Unmanaged,
 	}
 	return status
+}
+
+// Unmanaged reports whether the node is excluded from sentinel and scheduler actions.
+func (n *Node) Unmanaged() bool {
+	return n.cfg.Unmanaged
 }
 
 func (n *Node) GetDetailedStatus() *DetailedStatus {

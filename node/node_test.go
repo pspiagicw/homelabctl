@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/pspiagicw/homelabctl/config"
 )
@@ -281,5 +282,38 @@ func TestNodeFinishShutdown(t *testing.T) {
 
 	if node.State != OFF {
 		t.Errorf("node.State = %s, want %s", node.State, OFF)
+	}
+}
+
+// TestRegistryShutdownAllSkipsUnmanaged verifies the outage shutdown leaves unmanaged nodes alone
+func TestRegistryShutdownAllSkipsUnmanaged(t *testing.T) {
+	ran := map[string]int{}
+	newNode := func(name, addr string, unmanaged bool) *Node {
+		n := NewNode(name, config.NodeConfig{Address: addr, Unmanaged: unmanaged}, config.SSHConfig{})
+		n.State = ON
+		n.PingFunc = func(string) bool { return true }
+		n.RunFunc = func(_ context.Context, addr, _ string, _ config.SSHConfig) error {
+			ran[addr]++
+			return nil
+		}
+		// Never fires, so the shutdown timer goroutine doesn't change state mid-test.
+		n.AfterFunc = func(time.Duration) <-chan time.Time { return make(chan time.Time) }
+		return n
+	}
+	r := &Registry{Nodes: map[string]*Node{
+		"server":  newNode("server", "192.168.10.20", false),
+		"desktop": newNode("desktop", "192.168.10.40", true),
+	}}
+
+	r.ShutdownAll(context.Background())
+
+	if ran["192.168.10.20"] != 1 {
+		t.Errorf("managed node shutdown calls = %d, want 1", ran["192.168.10.20"])
+	}
+	if ran["192.168.10.40"] != 0 {
+		t.Errorf("unmanaged node shutdown calls = %d, want 0", ran["192.168.10.40"])
+	}
+	if r.Nodes["desktop"].State != ON {
+		t.Errorf("unmanaged node state = %s, want %s", r.Nodes["desktop"].State, ON)
 	}
 }

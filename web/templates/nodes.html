@@ -25,7 +25,7 @@
 		<dt>state since</dt>
 		<dd>{{if .Sentinel.LastTransitioned.IsZero}}daemon start{{else}}{{template "time" .Sentinel.LastTransitioned}}{{end}}</dd>
 		<dt>boot</dt>
-		<dd class="{{if $normal}}ok{{else}}blocked{{end}}">{{if $normal}}allowed{{else}}blocked until Normal{{end}}</dd>
+		<dd class="{{if $normal}}ok{{else}}blocked{{end}}">{{if $normal}}allowed{{else}}blocked for managed nodes until Normal{{end}}</dd>
 		<dt>shutdown</dt>
 		<dd class="ok">always allowed</dd>
 	</dl>
@@ -48,7 +48,7 @@
 	<article class="card node" data-state="{{.PowerState}}">
 		<header class="card-head">
 			<div>
-				<span class="label">node</span>
+				<span class="label">node</span>{{if .Unmanaged}}<span class="chip chip-unmanaged" title="Manual control only: the sentinel and schedule never touch this node">unmanaged</span>{{end}}
 				<h2>{{.Name}}</h2>
 			</div>
 			<span class="chip chip-{{.PowerState}}">{{.PowerState}}</span>
@@ -76,7 +76,7 @@
 		<div class="actions">
 			<button class="btn btn-boot"
 				hx-post="/ui/nodes/{{.Name}}/boot" hx-target="#panel" hx-disabled-elt="this"
-				{{if busy .PowerState}}title="{{.Name}} is {{.PowerState}}" disabled{{else if eq .PowerState "on"}}title="{{.Name}} is already on" disabled{{else if not $normal}}title="Boot is blocked while the sentinel is not Normal" disabled{{end}}>
+				{{if busy .PowerState}}title="{{.Name}} is {{.PowerState}}" disabled{{else if eq .PowerState "on"}}title="{{.Name}} is already on" disabled{{else if and (not $normal) (not .Unmanaged)}}title="Boot is blocked while the sentinel is not Normal" disabled{{end}}>
 				<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3h-2v10h2V3zm4.83 2.17-1.42 1.42A6.98 6.98 0 0 1 19 12a7 7 0 0 1-14 0c0-2.19 1.01-4.14 2.58-5.42L6.17 5.17A8.96 8.96 0 0 0 3 12a9 9 0 0 0 18 0c0-2.74-1.23-5.18-3.17-6.83z"/></svg>
 				Boot
 			</button>

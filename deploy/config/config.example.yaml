@@ -46,6 +46,16 @@ nodes:
     wait_after_boot: 60
     wait_after_shutdown: 60
 
+  # unmanaged: true = manual Boot / Shut down only (UI, API, CLI).
+  # The sentinel never shuts it down and doesn't block its boot during an
+  # outage, and the schedule never touches it. Keep it out of profiles.
+  desktop:
+    address: 192.168.10.40
+    mac: "aa:bb:cc:00:00:40"
+    wait_after_boot: 60
+    wait_after_shutdown: 60
+    unmanaged: true
+
 # ─────────────────────────────────────────────
 # Services: links shown on the dashboard (and, later, uptime-checked).
 # List order = dashboard order. Groups appear in first-seen order.

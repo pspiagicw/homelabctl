@@ -145,7 +145,8 @@ func (o *Orchestrator) Shutdown(ctx context.Context, name string) (any, error) {
 
 // TODO: Check if we need to send only true/false or node info too!
 func (o *Orchestrator) Boot(ctx context.Context, name string) (any, error) {
-	if _, ok := o.Registry.Nodes[name]; !ok {
+	n, ok := o.Registry.Nodes[name]
+	if !ok {
 		err := fmt.Errorf("boot requested on invalid node; node: %s; %w", name, apierr.ErrNotFound)
 		return Response{
 			false,
@@ -153,7 +154,8 @@ func (o *Orchestrator) Boot(ctx context.Context, name string) (any, error) {
 		}, err
 	}
 
-	if o.Sentinel.State != sentinel.Normal {
+	// Unmanaged nodes are outside the sentinel's control, so an outage doesn't block them.
+	if !n.Unmanaged() && o.Sentinel.State != sentinel.Normal {
 		return Response{
 			false,
 			"sentinel currently offline; can't boot any machines.",

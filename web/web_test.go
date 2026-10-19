@@ -20,6 +20,7 @@ import (
 type fakeBackend struct {
 	nodes    map[string]*node.NodeStatus
 	services []config.ServiceConfig
+	sentinel string // defaults to Normal when empty
 	booted   string
 	bootErr  error
 }
@@ -28,7 +29,10 @@ func (f *fakeBackend) NodeStates() *node.RegistryStatus {
 	return &node.RegistryStatus{Nodes: f.nodes}
 }
 func (f *fakeBackend) SentinelState() *sentinel.SentinelStatus {
-	return &sentinel.SentinelStatus{State: sentinel.Normal}
+	if f.sentinel == "" {
+		return &sentinel.SentinelStatus{State: sentinel.Normal}
+	}
+	return &sentinel.SentinelStatus{State: f.sentinel}
 }
 func (f *fakeBackend) Services() *service.ServiceList {
 	return &service.ServiceList{Services: f.services}
@@ -193,4 +197,18 @@ func TestNoServicesHidesSection(t *testing.T) {
 	body := serve(h, http.MethodGet, "/nodes").Body.String()
 
 	assert.NotContains(t, body, `class="services"`)
+}
+
+func TestUnmanagedNodeBootAllowedDuringOutage(t *testing.T) {
+	b, _ := setupUI(node.OFF)
+	b.sentinel = sentinel.OutageConfirmed
+	b.nodes["falcon1"].Unmanaged = true
+	h := New(b).Handler()
+
+	body := serve(h, http.MethodGet, "/nodes").Body.String()
+
+	// falcon1 (unmanaged) can boot; falcon-heavy (managed) stays blocked.
+	assert.Contains(t, body, "chip-unmanaged")
+	assert.Regexp(t, `(?s)hx-post="/ui/nodes/falcon-heavy/boot"[^>]*sentinel is not Normal" disabled>`, body)
+	assert.NotRegexp(t, `(?s)hx-post="/ui/nodes/falcon1/boot"[^>]*disabled>`, body)
 }

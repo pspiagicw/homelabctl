@@ -38,17 +38,17 @@ type SentinelConfig struct {
 //   address: 192.168.1.12
 //   mac: "b8:27:eb:00:00:02"
 //   wait_after_boot: 180        # static delay before considered "ready"
-//   services:
-//     - jellyfin
-//     - immich
-//     - truenas
+//   wait_after_shutdown: 60
+//   unmanaged: false            # true = manual control only
 
-// TODO: Services per node, not implemented.
 type NodeConfig struct {
 	Address         string `yaml:"address"`
 	MAC             string `yaml:"mac"`
 	BootTimeout     int    `yaml:"wait_after_boot"`
 	ShutdownTimeout int    `yaml:"wait_after_shutdown"`
+	// Unmanaged nodes are only booted/shut down by hand: the sentinel and
+	// scheduler never touch them.
+	Unmanaged bool `yaml:"unmanaged"`
 }
 
 // services:

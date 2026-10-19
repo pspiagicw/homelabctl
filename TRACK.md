@@ -74,6 +74,7 @@ These 2 functions are part of command parsing, not loading. Loading should only 
 - [ ] Validate `overrides.default_duration` parses to a positive duration
 - [ ] Validate SSH: identity file path exists and is readable (warn, not fail, if missing — daemon may run before keys are provisioned)
 - [ ] Validate at most one node has `always_on: true` per physical daemon host (sanity check, not a hard rule — decide during review)
+- [ ] Validate that `unmanaged: true` nodes do not appear in any profile's `nodes:` list
 
 ### 1.4 Defaults (`internal/config/defaults.go`)
 - [ ] Define default SSH port (22), connect timeout (10s), check_interval (30s) applied when omitted
@@ -167,6 +168,7 @@ These 2 functions are part of command parsing, not loading. Loading should only 
 - [ ] `func (s *Scheduler) ApplyProfile(ctx context.Context, name string) error` — computes diff between currently-active nodes and target profile's nodes
 - [ ] Boot new nodes in **list order** (respecting `wait_after_boot`/Prober between each, or parallel-with-stagger — decide and document)
 - [ ] Shut down nodes no longer in profile, in **reverse list order** of the *previous* profile
+- [ ] Ignore nodes with `unmanaged: true`: never booted or shut down by profile changes (manual control only)
 - [ ] `func (s *Scheduler) Run(ctx context.Context) error` — main loop: sleep until `NextTransition`, call `ApplyProfile`, repeat; select on ctx.Done() and an interrupt channel (for override/sentinel preemption)
 
 ### 4.3 Interruption handling (`internal/scheduler/interrupt.go`)
