@@ -1,11 +1,12 @@
 # /etc/homelabctl/config.yaml
-# homelabctl configuration — daemon runs on falcon-control
+# homelabctl example configuration — copy this, then replace every value
+# with your own hosts, addresses and services. All durations are in seconds.
 
 # ─────────────────────────────────────────────
-# Global SSH defaults (per-node overrides below)
+# Global SSH defaults, used to shut nodes down
 # ─────────────────────────────────────────────
 ssh:
-  user: root
+  user: homelabctl
   identity_file: /etc/homelabctl/keys/id_ed25519
   port: 22
   connection_timeout: 10
@@ -13,33 +14,34 @@ ssh:
   known_hosts_file: /etc/homelabctl/keys/known_hosts
 
 # ─────────────────────────────────────────────
-# Sentinel: mains-power proxy, NOT a managed node
+# Sentinel: a host on mains power (NOT battery backed) used as a power
+# probe. It is never managed and must not appear under nodes:.
 # ─────────────────────────────────────────────
 sentinel:
-  host: falcon-lite
-  address: 192.168.10.46
-  check_interval: 30          # how often we ping falcon-lite
-  outage_grace_period: 900    # 15 min of no response before declaring outage
-  restore_grace_period: 900   # 15 min of falcon-lite being back before WoL'ing nodes
+  host: router
+  address: 192.168.10.1
+  check_interval: 30          # how often the sentinel is pinged
+  outage_grace_period: 600    # unreachable this long -> outage confirmed, nodes shut down
+  restore_grace_period: 600   # reachable this long again -> outage over, boots allowed
 
 # ─────────────────────────────────────────────
-# Managed nodes (all on inverter/battery backup)
+# Managed nodes (on battery/inverter backup)
 # ─────────────────────────────────────────────
 nodes:
-  falcon-heavy:
-    address: 192.168.10.45
+  nas:
+    address: 192.168.10.20
     mac: "aa:bb:cc:00:00:20"
-    wait_after_boot: 180        # static delay before considered "ready"
-    wait_after_shutdown: 60     # static delay after shutdown before considering offline
+    wait_after_boot: 120        # wait after Wake-on-LAN before pinging to confirm "on"
+    wait_after_shutdown: 60     # wait after shutdown before pinging to confirm "off"
 
-  falcon2:
-    address: 192.168.10.43
+  hypervisor:
+    address: 192.168.10.21
     mac: "aa:bb:cc:00:00:21"
-    wait_after_boot: 60
+    wait_after_boot: 90
     wait_after_shutdown: 60
 
-  falcon1:
-    address: 192.168.10.44
+  media:
+    address: 192.168.10.22
     mac: "aa:bb:cc:00:00:22"
     wait_after_boot: 60
     wait_after_shutdown: 60
@@ -53,101 +55,76 @@ nodes:
 #   icon         image URL (https://github.com/homarr-labs/dashboard-icons)
 #   group        optional dashboard section
 #   node         optional host node, must be a key in nodes:
-# URLs below use each app's default port — check them against your setup.
 # ─────────────────────────────────────────────
 services:
-  - name: Jellyfin
-    description: Movies and TV streaming
-    url: http://192.168.10.45:8096
+  - name: Hypervisor
+    description: Virtual machines and containers
+    url: https://192.168.10.21:8006
+    icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/proxmox.svg
+    group: Infrastructure
+    node: hypervisor
+
+  - name: File shares
+    description: Network storage
+    url: http://192.168.10.20
+    icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/truenas.svg
+    group: Infrastructure
+    node: nas
+
+  - name: DNS
+    description: Network-wide ad blocking
+    url: http://192.168.10.30/admin
+    icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/pi-hole.svg
+    group: Infrastructure
+
+  - name: Media server
+    description: Movies and TV
+    url: http://192.168.10.22:8096
     icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/jellyfin.svg
     group: Media
-    node: falcon-heavy
+    node: media
 
-  - name: Immich
-    description: Photo and video library
-    url: http://192.168.10.45:2283
+  - name: Photos
+    description: Photo and video backup
+    url: http://192.168.10.23:2283
     icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/immich.svg
     group: Media
-    node: falcon-heavy
-
-  - name: Navidrome
-    description: Music streaming
-    url: http://192.168.10.44:4533
-    icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/navidrome.svg
-    group: Media
-    node: falcon1
-
-  - name: TrueNAS
-    description: Storage and shares
-    url: http://192.168.10.45
-    icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/truenas.svg
-    group: Storage & Backup
-    node: falcon-heavy
-
-  - name: Proxmox Backup Server
-    description: VM and container backups
-    url: https://192.168.10.43:8007
-    icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/proxmox-backup-server.svg
-    group: Storage & Backup
-    node: falcon2
-
-  - name: Borg target
-    description: Borg backup repository (SSH only, no web UI)
-    url: ssh://192.168.10.43:22
-    icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/borg.svg
-    group: Storage & Backup
-    node: falcon2
-
-  - name: Transmission
-    description: Torrent client
-    url: http://192.168.10.44:9091/transmission/web/
-    icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/transmission.svg
-    group: Downloads
-    node: falcon1
-
-  - name: slskd
-    description: Soulseek client
-    url: http://192.168.10.44:5030
-    icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/slskd.svg
-    group: Downloads
-    node: falcon1
 
 # ─────────────────────────────────────────────
 # Profiles: named sets of active nodes.
 # List order = boot order. Shutdown = reverse order.
 # ─────────────────────────────────────────────
 profiles:
-  backup:
+  daytime:
     nodes:
-      - falcon1
-      - falcon-heavy
+      - nas
+      - hypervisor
 
-  movie:
+  evening:
     nodes:
-      - falcon-heavy
-      - falcon2
+      - nas
+      - media
 
   off:
-    nodes: []                   # shuts down all managed nodes (falcon-control excluded, always_on)
+    nodes: []                   # shuts down all managed nodes
 
   all:
     nodes:
-      - falcon1
-      - falcon-heavy
-      - falcon2
+      - nas
+      - hypervisor
+      - media
 
 # ─────────────────────────────────────────────
 # Default daily schedule (24h local time)
 # ─────────────────────────────────────────────
 schedule:
   entries:
-    - time: "09:00"
-      profile: backup
-    - time: "12:30"
-      profile: movie
-    - time: "23:00"
+    - time: "08:00"
+      profile: daytime
+    - time: "18:00"
+      profile: evening
+    - time: "00:30"
       profile: off
-
 
 # ─────────────────────────────────────────────
 # Manual override behavior

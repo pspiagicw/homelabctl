@@ -20,6 +20,7 @@ coverage.html
 
 # Local config overrides (keep the example, ignore real configs)
 config.yaml
+deploy/config.yaml
 *.local.yaml
 !deploy/config/config.example.yaml
 
