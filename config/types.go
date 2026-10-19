@@ -45,11 +45,33 @@ type SentinelConfig struct {
 
 // TODO: Services per node, not implemented.
 type NodeConfig struct {
-	Address      string `yaml:"address"`
-	MAC          string `yaml:"mac"`
-	BootTimeout  int    `yaml:"wait_after_boot"`
-	ShutdownTimeout int `yaml:"wait_after_shutdown"`
+	Address         string `yaml:"address"`
+	MAC             string `yaml:"mac"`
+	BootTimeout     int    `yaml:"wait_after_boot"`
+	ShutdownTimeout int    `yaml:"wait_after_shutdown"`
 }
+
+// services:
+//   - name: Jellyfin
+//     description: Media Server
+//     url: http://192.168.10.91:8096
+//     icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/jellyfin.svg
+//     group: Media
+//     node: falcon-heavy
+
+// ServiceConfig is one dashboard entry. Group and Node are optional;
+// Node must be a key in nodes: when set.
+type ServiceConfig struct {
+	Name        string `yaml:"name"`
+	Description string `yaml:"description"`
+	URL         string `yaml:"url"`
+	Icon        string `yaml:"icon"`
+	Group       string `yaml:"group"`
+	Node        string `yaml:"node"`
+}
+
+// ServicesConfig is a list so the YAML order is kept as the dashboard order.
+type ServicesConfig []ServiceConfig
 
 // profiles:
 //   backup:
@@ -85,4 +107,5 @@ type Config struct {
 	Nodes    map[string]NodeConfig    `yaml:"nodes"`
 	Profiles map[string]ProfileConfig `yaml:"profiles"`
 	Schedule ScheduleConfig           `yaml:"schedule"`
+	Services ServicesConfig           `yaml:"services"`
 }
