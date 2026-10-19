@@ -31,29 +31,86 @@ nodes:
     mac: "aa:bb:cc:00:00:20"
     wait_after_boot: 180        # static delay before considered "ready"
     wait_after_shutdown: 60     # static delay after shutdown before considering offline
-    services:
-      - jellyfin
-      - immich
-      - truenas
 
   falcon2:
     address: 192.168.10.43
     mac: "aa:bb:cc:00:00:21"
     wait_after_boot: 60
     wait_after_shutdown: 60
-    services:
-      - proxmox-backup-server
-      - borg-target
 
   falcon1:
     address: 192.168.10.44
     mac: "aa:bb:cc:00:00:22"
     wait_after_boot: 60
     wait_after_shutdown: 60
-    services:
-      - transmission
-      - navidrome
-      - slskd
+
+# ─────────────────────────────────────────────
+# Services: links shown on the dashboard (and, later, uptime-checked).
+# List order = dashboard order. Groups appear in first-seen order.
+#   name         required, unique display name
+#   description  short line shown under the name
+#   url          where the tile links to
+#   icon         image URL (https://github.com/homarr-labs/dashboard-icons)
+#   group        optional dashboard section
+#   node         optional host node, must be a key in nodes:
+# URLs below use each app's default port — check them against your setup.
+# ─────────────────────────────────────────────
+services:
+  - name: Jellyfin
+    description: Movies and TV streaming
+    url: http://192.168.10.45:8096
+    icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/jellyfin.svg
+    group: Media
+    node: falcon-heavy
+
+  - name: Immich
+    description: Photo and video library
+    url: http://192.168.10.45:2283
+    icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/immich.svg
+    group: Media
+    node: falcon-heavy
+
+  - name: Navidrome
+    description: Music streaming
+    url: http://192.168.10.44:4533
+    icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/navidrome.svg
+    group: Media
+    node: falcon1
+
+  - name: TrueNAS
+    description: Storage and shares
+    url: http://192.168.10.45
+    icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/truenas.svg
+    group: Storage & Backup
+    node: falcon-heavy
+
+  - name: Proxmox Backup Server
+    description: VM and container backups
+    url: https://192.168.10.43:8007
+    icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/proxmox-backup-server.svg
+    group: Storage & Backup
+    node: falcon2
+
+  - name: Borg target
+    description: Borg backup repository (SSH only, no web UI)
+    url: ssh://192.168.10.43:22
+    icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/borg.svg
+    group: Storage & Backup
+    node: falcon2
+
+  - name: Transmission
+    description: Torrent client
+    url: http://192.168.10.44:9091/transmission/web/
+    icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/transmission.svg
+    group: Downloads
+    node: falcon1
+
+  - name: slskd
+    description: Soulseek client
+    url: http://192.168.10.44:5030
+    icon: https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/slskd.svg
+    group: Downloads
+    node: falcon1
 
 # ─────────────────────────────────────────────
 # Profiles: named sets of active nodes.
@@ -90,6 +147,7 @@ schedule:
       profile: movie
     - time: "23:00"
       profile: off
+
 
 # ─────────────────────────────────────────────
 # Manual override behavior
