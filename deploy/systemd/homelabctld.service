@@ -1,0 +1,16 @@
+# User unit for homelabctld on the Raspberry Pi.
+# Install: ~/.config/systemd/user/homelabctld.service, then
+#   systemctl --user daemon-reload && systemctl --user enable --now homelabctld
+# and `sudo loginctl enable-linger $USER` so it starts at boot without a login.
+[Unit]
+Description=homelabctl daemon (power orchestration for the homelab)
+Documentation=https://github.com/pspiagicw/homelabctl
+
+[Service]
+ExecStart=%h/.local/bin/homelabctld --config %h/.config/homelabctl/config.yaml
+Restart=on-failure
+RestartSec=10
+MemoryMax=150M
+
+[Install]
+WantedBy=default.target

@@ -16,10 +16,17 @@ LDFLAGS     := -X '$(MODULE)/version.Version=$(VERSION)' \
 GO          := go
 GOFLAGS     :=
 
-# Raspberry Pi cross-compile target. Override at the command line if needed,
-# e.g. `make deploy-build PI_GOARCH=arm PI_GOARM=7` for 32-bit Pi models.
+# Raspberry Pi 5 (falcon-control) target. Override at the command line if
+# needed, e.g. `make deploy PI_HOST=192.168.10.5`.
 PI_GOOS     := linux
 PI_GOARCH   := arm64
+PI_HOST     ?= falcon-control
+PI_BIN      := $(DIST_DIR)/homelabctld_$(PI_GOOS)_$(PI_GOARCH)
+
+# PI_HOST is an ~/.ssh/config alias with key auth. BatchMode makes a missing
+# key or alias fail immediately instead of hanging on a password prompt.
+SSH         := ssh -o BatchMode=yes
+SCP         := scp -o BatchMode=yes
 
 .PHONY: all
 all: build
@@ -41,14 +48,13 @@ build-daemon: ## Build the homelabctld daemon binary
 
 ## ---- Cross-compile (falcon-control deployment) -----------------------------
 
-.PHONY: deploy-build
-deploy-build: ## Cross-compile both binaries for the Raspberry Pi (falcon-control)
+# Daemon only: the CLI doesn't compile yet.
+.PHONY: build-pi
+build-pi: ## Cross-compile a static daemon binary for the Raspberry Pi
 	@mkdir -p $(DIST_DIR)
-	GOOS=$(PI_GOOS) GOARCH=$(PI_GOARCH) GOARM=$(PI_GOARM) $(GO) build \
-		-ldflags "$(LDFLAGS)" -o $(DIST_DIR)/homelabctl_$(PI_GOOS)_$(PI_GOARCH) $(CLI_PKG)
-	GOOS=$(PI_GOOS) GOARCH=$(PI_GOARCH) GOARM=$(PI_GOARM) $(GO) build \
-		-ldflags "$(LDFLAGS)" -o $(DIST_DIR)/homelabctld_$(PI_GOOS)_$(PI_GOARCH) $(DAEMON_PKG)
-	@echo "Built for $(PI_GOOS)/$(PI_GOARCH) -> $(DIST_DIR)/"
+	CGO_ENABLED=0 GOOS=$(PI_GOOS) GOARCH=$(PI_GOARCH) $(GO) build \
+		-ldflags "$(LDFLAGS)" -o $(PI_BIN) $(DAEMON_PKG)
+	@echo "Built for $(PI_GOOS)/$(PI_GOARCH) -> $(PI_BIN)"
 
 ## ---- Test / Lint / Vet -----------------------------------------------------
 
@@ -94,11 +100,25 @@ install: build ## Install both binaries to /usr/local/bin (local machine)
 	sudo install -m 0755 $(BIN_DIR)/homelabctl /usr/local/bin/homelabctl
 	sudo install -m 0755 $(BIN_DIR)/homelabctld /usr/local/bin/homelabctld
 
-.PHONY: install-service
-install-service: ## Install and enable the homelabctld systemd unit
-	sudo install -m 0644 deploy/systemd/homelabctld.service /etc/systemd/system/homelabctld.service
-	sudo systemctl daemon-reload
-	sudo systemctl enable homelabctld
+# Pushes the binary and restarts the user service. The mv swaps the file in
+# one step, so the service never runs a partial copy. One-time Pi setup
+# (unit, linger, ping sysctl) is manual: see deploy/README.md.
+# Restarting while the sentinel is down shuts managed nodes down ~30s later.
+.PHONY: deploy
+deploy: build-pi ## Push the daemon to the Pi and restart it
+	$(SSH) $(PI_HOST) 'mkdir -p ~/.local/bin'
+	$(SCP) $(PI_BIN) $(PI_HOST):.local/bin/homelabctld.new
+	$(SSH) $(PI_HOST) 'mv ~/.local/bin/homelabctld.new ~/.local/bin/homelabctld && \
+		~/.local/bin/homelabctld --version && \
+		systemctl --user restart homelabctld'
+
+# Copies the real config (gitignored) with mode 0600. Restart separately.
+.PHONY: deploy-config
+deploy-config: ## Copy deploy/config.yaml to ~/.config/homelabctl/ on the Pi
+	$(SSH) $(PI_HOST) 'mkdir -p ~/.config/homelabctl'
+	$(SCP) deploy/config.yaml $(PI_HOST):.config/homelabctl/config.yaml.new
+	$(SSH) $(PI_HOST) 'install -m 0600 ~/.config/homelabctl/config.yaml.new ~/.config/homelabctl/config.yaml && \
+		rm ~/.config/homelabctl/config.yaml.new'
 
 ## ---- Housekeeping -----------------------------------------------------------
 

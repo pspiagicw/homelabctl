@@ -33,8 +33,10 @@ make lint
 # Format Go code
 make fmt
 
-# Cross-compile for Raspberry Pi deployment
-make deploy-build PI_GOARCH=arm64 PI_GOARM=7
+# Raspberry Pi 5 (falcon-control) deployment — see deploy/README.md
+make build-pi        # static arm64 daemon binary in dist/
+make deploy          # build, push to ~/.local/bin on the Pi, restart the user service
+make deploy-config   # copy deploy/config.yaml (gitignored, real config) to ~/.config/homelabctl/
 
 # Clean build artifacts
 make clean
@@ -70,7 +72,8 @@ sentinel/              # Power-outage watchdog state machine
   [actions.go]         # ShutdownAll(), RestoreAll() functions
 
 deploy/                # Deployment artifacts
-  - systemd/homelabctld.service   # systemd unit file
+  - systemd/homelabctld.service   # user systemd unit (systemctl --user)
+  - README.md                     # Pi deployment runbook
   - config/config.example.yaml    # Example configuration (unstructured YAML for documentation)
 ```
 
@@ -305,13 +308,13 @@ go build ./cmd/homelabctl && ./bin/homelabctl status
 # Outputs: Profile: movie (active since 12:30, next: off @ 23:00)
 ```
 
-### Install on a Linux machine with systemd
+### Deploy to the Raspberry Pi
+The daemon runs as the user (not root) under a user systemd unit, with config
+in `~/.config/homelabctl/`. One-time setup (unit, `loginctl enable-linger`,
+`ping_group_range` sysctl) is manual and documented in `deploy/README.md`.
 ```bash
-make build && sudo install -m 0755 bin/homelabctl /usr/local/bin/
-sudo install -m 0755 bin/homelabctld /usr/local/bin/homelabctld
-sudo cp deploy/systemd/homelabctld.service /etc/systemd/system/homelabctld.service
-sudo systemctl enable --now homelabctld
-# Edit config.yaml and copy to /etc/homelabctl/
+make deploy-config   # first time, and after config changes
+make deploy          # every release
 ```
 
 ## Future Work (Not Yet Implemented)
