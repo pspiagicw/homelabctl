@@ -9,13 +9,17 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/pspiagicw/homelabctl/config"
 	"github.com/pspiagicw/homelabctl/logging"
 	"github.com/pspiagicw/homelabctl/node"
 	"github.com/pspiagicw/homelabctl/sentinel"
+	"github.com/pspiagicw/homelabctl/service"
 	"github.com/pspiagicw/homelabctl/utils"
 )
 
@@ -27,6 +31,7 @@ var assets embed.FS
 type Backend interface {
 	NodeStates() *node.RegistryStatus
 	SentinelState() *sentinel.SentinelStatus
+	Services() *service.ServiceList
 	Boot(ctx context.Context, name string) (any, error)
 	Shutdown(ctx context.Context, name string) (any, error)
 }
@@ -43,9 +48,22 @@ type nodeRow struct {
 	*node.NodeStatus
 }
 
+// serviceTile is a service plus what the dashboard shows about it.
+type serviceTile struct {
+	config.ServiceConfig
+	Host      string // host[:port] from URL, shown under the description
+	NodeState string // power state of Node; empty when Node is unset
+}
+
+type serviceGroup struct {
+	Name     string
+	Services []serviceTile
+}
+
 type view struct {
 	Sentinel *sentinel.SentinelStatus
 	Nodes    []nodeRow
+	Services []serviceGroup
 	Message  string
 	Failed   bool
 }
@@ -60,6 +78,13 @@ var funcs = template.FuncMap{
 			return "never"
 		}
 		return t.Format("Jan 2, 15:04:05")
+	},
+	// initial is the letter shown when a service icon is missing or fails to load.
+	"initial": func(name string) string {
+		for _, r := range name {
+			return strings.ToUpper(string(r))
+		}
+		return "?"
 	},
 }
 
@@ -94,7 +119,37 @@ func (u *UI) view() view {
 	}
 	sort.Slice(v.Nodes, func(i, j int) bool { return v.Nodes[i].Name < v.Nodes[j].Name })
 
+	states := make(map[string]string, len(v.Nodes))
+	for _, n := range v.Nodes {
+		states[n.Name] = n.PowerState
+	}
+	v.Services = groupServices(u.backend.Services().Services, states)
+
 	return v
+}
+
+// groupServices keeps config order: groups in first-seen order, and services
+// in list order within each group.
+func groupServices(services []config.ServiceConfig, states map[string]string) []serviceGroup {
+	var groups []serviceGroup
+	index := make(map[string]int)
+
+	for _, s := range services {
+		tile := serviceTile{ServiceConfig: s, Host: s.URL, NodeState: states[s.Node]}
+		if parsed, err := url.Parse(s.URL); err == nil && parsed.Host != "" {
+			tile.Host = parsed.Host
+		}
+
+		i, ok := index[s.Group]
+		if !ok {
+			i = len(groups)
+			index[s.Group] = i
+			groups = append(groups, serviceGroup{Name: s.Group})
+		}
+		groups[i].Services = append(groups[i].Services, tile)
+	}
+
+	return groups
 }
 
 func (u *UI) handleIndex(w http.ResponseWriter, r *http.Request) {

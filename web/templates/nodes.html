@@ -93,6 +93,37 @@
 	<p class="empty">No nodes configured.</p>
 	{{end}}
 </section>
+
+{{if .Services}}
+<section class="services" aria-label="Services">
+	{{range .Services}}
+	<div class="service-group">
+		<h3 class="group-title">{{if .Name}}{{.Name}}{{else}}other{{end}}<span class="group-count">{{len .Services}}</span></h3>
+		<div class="service-grid">
+			{{range .Services}}
+			{{$down := and .Node (ne .NodeState "on")}}
+			{{$state := or .NodeState "unknown"}}
+			<a class="card service{{if $down}} service-down{{end}}" href="{{.URL}}" target="_blank" rel="noopener noreferrer"
+				title="{{.Name}}{{if $down}} — {{.Node}} is {{$state}}{{end}}">
+				<span class="service-icon" aria-hidden="true">
+					{{initial .Name}}
+					{{with .Icon}}<img src="{{.}}" alt="" loading="lazy" onerror="this.remove()">{{end}}
+				</span>
+				<span class="service-body">
+					<span class="service-name">{{.Name}}</span>
+					{{with .Description}}<span class="service-desc">{{.}}</span>{{end}}
+					<span class="service-meta">
+						<code>{{.Host}}</code>
+						{{with .Node}}<span class="service-node node-{{$state}}">{{.}} · {{$state}}</span>{{end}}
+					</span>
+				</span>
+			</a>
+			{{end}}
+		</div>
+	</div>
+	{{end}}
+</section>
+{{end}}
 {{end}}
 
 {{/* Human-readable sentinel state for the chip, e.g. OutageDetected -> outage detected. */}}

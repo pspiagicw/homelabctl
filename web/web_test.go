@@ -9,16 +9,19 @@ import (
 	"testing"
 
 	"github.com/pspiagicw/homelabctl/apierr"
+	"github.com/pspiagicw/homelabctl/config"
 	"github.com/pspiagicw/homelabctl/node"
 	"github.com/pspiagicw/homelabctl/sentinel"
+	"github.com/pspiagicw/homelabctl/service"
 	"github.com/stretchr/testify/assert"
 )
 
 // fakeBackend records the node passed to Boot/Shutdown and returns bootErr from Boot.
 type fakeBackend struct {
-	nodes   map[string]*node.NodeStatus
-	booted  string
-	bootErr error
+	nodes    map[string]*node.NodeStatus
+	services []config.ServiceConfig
+	booted   string
+	bootErr  error
 }
 
 func (f *fakeBackend) NodeStates() *node.RegistryStatus {
@@ -26,6 +29,9 @@ func (f *fakeBackend) NodeStates() *node.RegistryStatus {
 }
 func (f *fakeBackend) SentinelState() *sentinel.SentinelStatus {
 	return &sentinel.SentinelStatus{State: sentinel.Normal}
+}
+func (f *fakeBackend) Services() *service.ServiceList {
+	return &service.ServiceList{Services: f.services}
 }
 func (f *fakeBackend) Boot(_ context.Context, name string) (any, error) {
 	f.booted = name
@@ -137,4 +143,54 @@ func TestStaticAssets(t *testing.T) {
 		rec := serve(h, http.MethodGet, path)
 		assert.Equal(t, http.StatusOK, rec.Code, path)
 	}
+}
+
+// setupServicesUI adds services to a UI whose nodes are all in the given state.
+func setupServicesUI(state string) http.Handler {
+	b, _ := setupUI(state)
+	b.services = []config.ServiceConfig{
+		{Name: "Jellyfin", URL: "http://192.168.10.91:8096", Group: "Media", Node: "falcon-heavy"},
+		{Name: "PiHole", URL: "http://192.168.10.92/admin", Group: "Infrastructure"},
+		{Name: "Immich", URL: "http://192.168.10.99:2283", Group: "Media"},
+		{Name: "Homer", URL: "http://192.168.10.85:8010"},
+	}
+	return New(b).Handler()
+}
+
+func TestServicesGroupedInConfigOrder(t *testing.T) {
+	h := setupServicesUI(node.ON)
+
+	body := serve(h, http.MethodGet, "/nodes").Body.String()
+
+	// Groups appear in first-seen order, services keep list order inside a group,
+	// and ungrouped services land in "other".
+	assert.Regexp(t, `(?s)Media.*Jellyfin.*Immich.*Infrastructure.*PiHole.*other.*Homer`, body)
+	assert.Contains(t, body, `href="http://192.168.10.91:8096"`)
+	assert.Contains(t, body, "<code>192.168.10.91:8096</code>")
+}
+
+func TestServiceOnNodeOffIsDimmed(t *testing.T) {
+	h := setupServicesUI(node.OFF)
+
+	body := serve(h, http.MethodGet, "/nodes").Body.String()
+
+	assert.Contains(t, body, "service-down")
+	assert.Contains(t, body, "falcon-heavy is off")
+}
+
+func TestServiceOnNodeOnIsNotDimmed(t *testing.T) {
+	h := setupServicesUI(node.ON)
+
+	body := serve(h, http.MethodGet, "/nodes").Body.String()
+
+	assert.NotContains(t, body, "service-down")
+	assert.Contains(t, body, "falcon-heavy · on")
+}
+
+func TestNoServicesHidesSection(t *testing.T) {
+	_, h := setupUI(node.ON)
+
+	body := serve(h, http.MethodGet, "/nodes").Body.String()
+
+	assert.NotContains(t, body, `class="services"`)
 }

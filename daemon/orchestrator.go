@@ -53,6 +53,10 @@ func NewOrchestrator(cfg *config.Config) *Orchestrator {
 	return o
 }
 
+func (o *Orchestrator) Services() *service.ServiceList {
+	return o.Service.GetServices()
+}
+
 func (o *Orchestrator) ListServices(ctx context.Context) (any, error) {
 	list := o.Service.GetServices()
 
