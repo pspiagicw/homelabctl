@@ -17,6 +17,7 @@ type Backend interface {
 	GetNode(ctx context.Context, name string) (any, error)
 	Boot(ctx context.Context, name string) (any, error)
 	Shutdown(ctx context.Context, name string) (any, error)
+	ListServices(ctx context.Context) (any, error)
 }
 
 type Server struct {
@@ -72,6 +73,8 @@ func (s *Server) Init() {
 		r.Post("/{name}/boot", s.handleBoot)
 		r.Post("/{name}/shutdown", s.handleShutdown)
 	})
+
+	s.router.Get("/services", s.handleService)
 
 	if s.UI != nil {
 		s.router.Mount("/ui", s.UI)
@@ -146,6 +149,11 @@ func (s *Server) handleShutdown(w http.ResponseWriter, r *http.Request) {
 	response, err := s.backend.Shutdown(r.Context(), name)
 	s.WriteResponse(response, err, w)
 
+}
+
+func (s *Server) handleService(w http.ResponseWriter, r *http.Request) {
+	response, err := s.backend.ListServices(r.Context())
+	s.WriteResponse(response, err, w)
 }
 
 // Handler returns the HTTP handler for this server.

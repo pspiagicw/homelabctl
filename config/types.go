@@ -62,12 +62,12 @@ type NodeConfig struct {
 // ServiceConfig is one dashboard entry. Group and Node are optional;
 // Node must be a key in nodes: when set.
 type ServiceConfig struct {
-	Name        string `yaml:"name"`
-	Description string `yaml:"description"`
-	URL         string `yaml:"url"`
-	Icon        string `yaml:"icon"`
-	Group       string `yaml:"group"`
-	Node        string `yaml:"node"`
+	Name        string `yaml:"name" json:"name"`
+	Description string `yaml:"description" json:"description"`
+	URL         string `yaml:"url" json:"url"`
+	Icon        string `yaml:"icon" json:"icon"`
+	Group       string `yaml:"group" json:"group"`
+	Node        string `yaml:"node" json:"node"`
 }
 
 // ServicesConfig is a list so the YAML order is kept as the dashboard order.

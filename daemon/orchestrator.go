@@ -11,12 +11,14 @@ import (
 	"github.com/pspiagicw/homelabctl/config"
 	"github.com/pspiagicw/homelabctl/node"
 	"github.com/pspiagicw/homelabctl/sentinel"
+	"github.com/pspiagicw/homelabctl/service"
 	"github.com/pspiagicw/homelabctl/web"
 )
 
 type Orchestrator struct {
 	Registry *node.Registry
 	Sentinel *sentinel.Sentinel
+	Service  *service.Service
 	Server   *api.Server
 }
 
@@ -34,6 +36,7 @@ func NewOrchestrator(cfg *config.Config) *Orchestrator {
 	o := &Orchestrator{}
 	o.Registry = node.NewRegistry(cfg)
 	o.Sentinel = sentinel.NewSentinel(cfg)
+	o.Service = service.NewService(cfg)
 	// Server also owns orchestrator!
 	o.Server = api.NewServer(cfg, o)
 	o.Server.UI = web.New(o).Handler()
@@ -48,6 +51,12 @@ func NewOrchestrator(cfg *config.Config) *Orchestrator {
 	)
 
 	return o
+}
+
+func (o *Orchestrator) ListServices(ctx context.Context) (any, error) {
+	list := o.Service.GetServices()
+
+	return list, nil
 }
 
 func (o *Orchestrator) GetNode(ctx context.Context, name string) (any, error) {

@@ -25,6 +25,11 @@ func (f *fakeBackend) Boot(_ context.Context, _ string) (any, error) {
 func (f *fakeBackend) Shutdown(_ context.Context, _ string) (any, error) {
 	return nil, nil
 }
+func (f *fakeBackend) ListServices(_ context.Context) (any, error) {
+	return map[string][]config.ServiceConfig{
+		"services": {{Name: "Jellyfin", URL: "http://192.168.10.91:8096"}},
+	}, nil
+}
 
 // Mock backend that returns errors for testing error cases
 type errorBackend struct{}
@@ -38,6 +43,9 @@ func (e *errorBackend) Boot(_ context.Context, _ string) (any, error) {
 	return nil, apierr.ErrUnavailable
 }
 func (e *errorBackend) Shutdown(_ context.Context, _ string) (any, error) {
+	return nil, apierr.ErrUpstream
+}
+func (e *errorBackend) ListServices(_ context.Context) (any, error) {
 	return nil, apierr.ErrUpstream
 }
 
@@ -246,6 +254,47 @@ func TestShutdownEndpointWithError(t *testing.T) {
 	req := httptest.NewRequest("POST", "/nodes/test-node/shutdown", nil)
 	rec := httptest.NewRecorder()
 	
+	// Test the handler directly
+	server.Handler().ServeHTTP(rec, req)
+
+	// Check that we get an upstream error status (502)
+	assert.Equal(t, http.StatusBadGateway, rec.Code)
+}
+
+func TestServicesEndpoint(t *testing.T) {
+	// Create a simple config (we don't need real values for this test)
+	cfg := &config.Config{}
+
+	// Create server with fake backend
+	server := NewServer(cfg, &fakeBackend{})
+	server.Init()
+
+	// Create test request
+	req := httptest.NewRequest("GET", "/services", nil)
+	rec := httptest.NewRecorder()
+
+	// Test the handler directly
+	server.Handler().ServeHTTP(rec, req)
+
+	// Check that we get a 200 status and the service list as JSON
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
+	assert.Contains(t, rec.Body.String(), `"name":"Jellyfin"`)
+	assert.Contains(t, rec.Body.String(), `"url":"http://192.168.10.91:8096"`)
+}
+
+func TestServicesEndpointWithError(t *testing.T) {
+	// Create a simple config (we don't need real values for this test)
+	cfg := &config.Config{}
+
+	// Create server with error backend
+	server := NewServer(cfg, &errorBackend{})
+	server.Init()
+
+	// Create test request
+	req := httptest.NewRequest("GET", "/services", nil)
+	rec := httptest.NewRecorder()
+
 	// Test the handler directly
 	server.Handler().ServeHTTP(rec, req)
 
