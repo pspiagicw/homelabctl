@@ -18,11 +18,12 @@ import (
 
 // fakeBackend records the node passed to Boot/Shutdown and returns bootErr from Boot.
 type fakeBackend struct {
-	nodes    map[string]*node.NodeStatus
-	services []config.ServiceConfig
-	sentinel string // defaults to Normal when empty
-	booted   string
-	bootErr  error
+	nodes     map[string]*node.NodeStatus
+	services  []config.ServiceConfig
+	sentinel  string // defaults to Normal when empty
+	booted    string
+	bootErr   error
+	refreshed int // number of RefreshNodes calls
 }
 
 func (f *fakeBackend) NodeStates() *node.RegistryStatus {
@@ -33,6 +34,10 @@ func (f *fakeBackend) SentinelState() *sentinel.SentinelStatus {
 		return &sentinel.SentinelStatus{State: sentinel.Normal}
 	}
 	return &sentinel.SentinelStatus{State: f.sentinel}
+}
+func (f *fakeBackend) RefreshNodes(_ context.Context) (any, error) {
+	f.refreshed++
+	return nil, nil
 }
 func (f *fakeBackend) Services() *service.ServiceList {
 	return &service.ServiceList{Services: f.services}
@@ -211,4 +216,14 @@ func TestUnmanagedNodeBootAllowedDuringOutage(t *testing.T) {
 	assert.Contains(t, body, "chip-unmanaged")
 	assert.Regexp(t, `(?s)hx-post="/ui/nodes/falcon-heavy/boot"[^>]*sentinel is not Normal" disabled>`, body)
 	assert.NotRegexp(t, `(?s)hx-post="/ui/nodes/falcon1/boot"[^>]*disabled>`, body)
+}
+
+func TestRefreshAction(t *testing.T) {
+	b, h := setupUI(node.ON)
+
+	rec := serve(h, http.MethodPost, "/nodes/refresh")
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, 1, b.refreshed)
+	assert.Contains(t, rec.Body.String(), "refreshed 2 nodes")
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/pspiagicw/homelabctl/apierr"
 	"github.com/pspiagicw/homelabctl/config"
@@ -43,6 +44,38 @@ func (r *Registry) Init() {
 	}
 	wg.Wait()
 	slog.Info("registry initialized!")
+}
+
+// RefreshAll re-pings every node in parallel. Nodes mid-boot or mid-shutdown
+// are left to their timers (see Node.refresh).
+func (r *Registry) RefreshAll() {
+	var wg sync.WaitGroup
+	wg.Add(len(r.Nodes))
+	for _, node := range r.Nodes {
+		go func() {
+			node.refresh()
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+	slog.Info("nodes refreshed", "count", len(r.Nodes))
+}
+
+// Watch calls RefreshAll every interval until ctx is cancelled.
+func (r *Registry) Watch(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	slog.Info("node refresher started", "interval", interval)
+
+	for {
+		select {
+		case <-ctx.Done():
+			slog.Info("shutdown requested, stopping node refresher.")
+			return
+		case <-ticker.C:
+			r.RefreshAll()
+		}
+	}
 }
 
 func (r *Registry) Status() *RegistryStatus {

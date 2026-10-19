@@ -36,6 +36,10 @@
 	<span class="dot dot-on"><b id="count-on">-</b> on</span>
 	<span class="dot dot-off"><b id="count-off">-</b> off</span>
 	<span class="dot dot-busy"><b id="count-busy">-</b> transitioning</span>
+	<button class="btn-text btn-refresh" type="button" title="Re-ping every node now (also runs every 15 min)"
+		hx-post="/ui/nodes/refresh" hx-target="#panel" hx-disabled-elt="this">
+		<span class="when-idle">refresh</span><span class="when-busy">refreshing…</span>
+	</button>
 </section>
 
 {{with .Message}}

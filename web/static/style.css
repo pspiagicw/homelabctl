@@ -214,6 +214,12 @@ main { min-width: 0; }
 	color: var(--muted);
 }
 .summary b { color: var(--on-surface); font-weight: 600; }
+.summary { align-items: center; }
+.btn-refresh { margin-left: auto; padding: 4px 10px; }
+.btn-refresh .when-busy { display: none; }
+.btn-refresh.htmx-request { cursor: progress; }
+.btn-refresh.htmx-request .when-idle { display: none; }
+.btn-refresh.htmx-request .when-busy { display: inline; }
 .dot::before {
 	content: "";
 	display: inline-block;

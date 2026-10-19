@@ -30,6 +30,9 @@ func (f *fakeBackend) ListServices(_ context.Context) (any, error) {
 		"services": {{Name: "Jellyfin", URL: "http://192.168.10.91:8096"}},
 	}, nil
 }
+func (f *fakeBackend) RefreshNodes(_ context.Context) (any, error) {
+	return map[string]bool{"refreshed": true}, nil
+}
 
 // Mock backend that returns errors for testing error cases
 type errorBackend struct{}
@@ -46,6 +49,9 @@ func (e *errorBackend) Shutdown(_ context.Context, _ string) (any, error) {
 	return nil, apierr.ErrUpstream
 }
 func (e *errorBackend) ListServices(_ context.Context) (any, error) {
+	return nil, apierr.ErrUpstream
+}
+func (e *errorBackend) RefreshNodes(_ context.Context) (any, error) {
 	return nil, apierr.ErrUpstream
 }
 
@@ -293,6 +299,45 @@ func TestServicesEndpointWithError(t *testing.T) {
 
 	// Create test request
 	req := httptest.NewRequest("GET", "/services", nil)
+	rec := httptest.NewRecorder()
+
+	// Test the handler directly
+	server.Handler().ServeHTTP(rec, req)
+
+	// Check that we get an upstream error status (502)
+	assert.Equal(t, http.StatusBadGateway, rec.Code)
+}
+
+func TestRefreshNodesEndpoint(t *testing.T) {
+	// Create a simple config (we don't need real values for this test)
+	cfg := &config.Config{}
+
+	// Create server with fake backend
+	server := NewServer(cfg, &fakeBackend{})
+	server.Init()
+
+	// Create test request
+	req := httptest.NewRequest("POST", "/nodes/refresh", nil)
+	rec := httptest.NewRecorder()
+
+	// Test the handler directly
+	server.Handler().ServeHTTP(rec, req)
+
+	// Check that we get a 200 status and the backend's response
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"refreshed":true`)
+}
+
+func TestRefreshNodesEndpointWithError(t *testing.T) {
+	// Create a simple config (we don't need real values for this test)
+	cfg := &config.Config{}
+
+	// Create server with error backend
+	server := NewServer(cfg, &errorBackend{})
+	server.Init()
+
+	// Create test request
+	req := httptest.NewRequest("POST", "/nodes/refresh", nil)
 	rec := httptest.NewRecorder()
 
 	// Test the handler directly

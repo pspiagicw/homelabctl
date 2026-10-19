@@ -18,6 +18,7 @@ type Backend interface {
 	Boot(ctx context.Context, name string) (any, error)
 	Shutdown(ctx context.Context, name string) (any, error)
 	ListServices(ctx context.Context) (any, error)
+	RefreshNodes(ctx context.Context) (any, error)
 }
 
 type Server struct {
@@ -72,6 +73,7 @@ func (s *Server) Init() {
 		r.Get("/{name}", s.handleGetNode)
 		r.Post("/{name}/boot", s.handleBoot)
 		r.Post("/{name}/shutdown", s.handleShutdown)
+		r.Post("/refresh", s.handleRefreshNodes)
 	})
 
 	s.router.Get("/services", s.handleService)
@@ -153,6 +155,11 @@ func (s *Server) handleShutdown(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleService(w http.ResponseWriter, r *http.Request) {
 	response, err := s.backend.ListServices(r.Context())
+	s.WriteResponse(response, err, w)
+}
+
+func (s *Server) handleRefreshNodes(w http.ResponseWriter, r *http.Request) {
+	response, err := s.backend.RefreshNodes(r.Context())
 	s.WriteResponse(response, err, w)
 }
 

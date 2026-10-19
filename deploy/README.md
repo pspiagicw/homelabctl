@@ -65,7 +65,7 @@ Check on it:
 
 ```sh
 ssh falcon-control systemctl --user status homelabctld
-ssh falcon-control journalctl --user -u homelabctld -f
+ssh falcon-control journalctl --user-unit homelabctld -f
 ```
 
 ## Warning: check the sentinel before restarting

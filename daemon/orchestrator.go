@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/pspiagicw/homelabctl/api"
 	"github.com/pspiagicw/homelabctl/apierr"
@@ -14,6 +15,10 @@ import (
 	"github.com/pspiagicw/homelabctl/service"
 	"github.com/pspiagicw/homelabctl/web"
 )
+
+// nodeRefreshInterval is how often every node is re-pinged in the background,
+// so state set outside the daemon (manual power on/off) doesn't stay stale.
+const nodeRefreshInterval = 15 * time.Minute
 
 type Orchestrator struct {
 	Registry *node.Registry
@@ -93,6 +98,13 @@ func (o *Orchestrator) ListNodes(ctx context.Context) (any, error) {
 	r := o.Registry.Status()
 
 	return r, nil
+}
+
+// RefreshNodes re-pings every node now and returns the updated status.
+func (o *Orchestrator) RefreshNodes(ctx context.Context) (any, error) {
+	o.Registry.RefreshAll()
+
+	return o.Registry.Status(), nil
 }
 func (o *Orchestrator) Status(ctx context.Context) (any, error) {
 	s := o.Sentinel.Status()
@@ -177,13 +189,17 @@ func (o *Orchestrator) Boot(ctx context.Context, name string) (any, error) {
 func (o *Orchestrator) Start(ctx context.Context) {
 	slog.Info("orchestrator started!")
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(3)
 	go func() {
 		o.Server.Run(ctx)
 		wg.Done()
 	}()
 	go func() {
 		o.Sentinel.Run(ctx)
+		wg.Done()
+	}()
+	go func() {
+		o.Registry.Watch(ctx, nodeRefreshInterval)
 		wg.Done()
 	}()
 

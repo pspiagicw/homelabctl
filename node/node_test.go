@@ -317,3 +317,80 @@ func TestRegistryShutdownAllSkipsUnmanaged(t *testing.T) {
 		t.Errorf("unmanaged node state = %s, want %s", r.Nodes["desktop"].State, ON)
 	}
 }
+
+// TestRegistryRefreshAllUpdatesState verifies stale states are corrected from a fresh ping
+func TestRegistryRefreshAllUpdatesState(t *testing.T) {
+	staleOn := setupNodeWithMocks()
+	staleOn.State = ON
+	staleOn.PingFunc = func(string) bool { return false }
+
+	staleOff := setupNodeWithMocks()
+	staleOff.State = OFF
+	staleOff.PingFunc = func(string) bool { return true }
+
+	r := &Registry{Nodes: map[string]*Node{"stale-on": staleOn, "stale-off": staleOff}}
+	r.RefreshAll()
+
+	if staleOn.State != OFF {
+		t.Errorf("stale-on state = %s, want %s", staleOn.State, OFF)
+	}
+	if staleOff.State != ON {
+		t.Errorf("stale-off state = %s, want %s", staleOff.State, ON)
+	}
+}
+
+// TestRegistryRefreshAllSkipsBusy verifies nodes mid-boot are left to their timers
+func TestRegistryRefreshAllSkipsBusy(t *testing.T) {
+	booting := setupNodeWithMocks()
+	booting.State = BOOTING
+	booting.PingFunc = func(string) bool {
+		t.Errorf("PingFunc called while BOOTING")
+		return true
+	}
+
+	r := &Registry{Nodes: map[string]*Node{"booting": booting}}
+	r.RefreshAll()
+
+	if booting.State != BOOTING {
+		t.Errorf("node state = %s, want %s", booting.State, BOOTING)
+	}
+}
+
+// TestRegistryWatchRefreshesAndStops verifies Watch refreshes on its interval and exits on cancel
+func TestRegistryWatchRefreshesAndStops(t *testing.T) {
+	pinged := make(chan struct{}, 1)
+	n := setupNodeWithMocks()
+	n.State = OFF
+	n.PingFunc = func(string) bool {
+		select {
+		case pinged <- struct{}{}:
+		default:
+		}
+		return true
+	}
+	r := &Registry{Nodes: map[string]*Node{"n": n}}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		r.Watch(ctx, 10*time.Millisecond)
+		close(done)
+	}()
+
+	select {
+	case <-pinged:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Watch did not refresh within 2s")
+	}
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Watch did not stop after cancel")
+	}
+
+	if n.State != ON {
+		t.Errorf("node state = %s, want %s", n.State, ON)
+	}
+}

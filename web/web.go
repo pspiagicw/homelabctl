@@ -32,6 +32,7 @@ type Backend interface {
 	NodeStates() *node.RegistryStatus
 	SentinelState() *sentinel.SentinelStatus
 	Services() *service.ServiceList
+	RefreshNodes(ctx context.Context) (any, error)
 	Boot(ctx context.Context, name string) (any, error)
 	Shutdown(ctx context.Context, name string) (any, error)
 }
@@ -104,6 +105,7 @@ func (u *UI) Handler() http.Handler {
 	r.Get("/nodes", u.handleNodes)
 	r.Post("/nodes/{name}/boot", u.handleAction("boot", u.backend.Boot))
 	r.Post("/nodes/{name}/shutdown", u.handleAction("shutdown", u.backend.Shutdown))
+	r.Post("/nodes/refresh", u.handleRefresh)
 	r.Get("/static/*", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFileFS(w, r, u.static, chi.URLParam(r, "*"))
 	})
@@ -158,6 +160,22 @@ func (u *UI) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 func (u *UI) handleNodes(w http.ResponseWriter, r *http.Request) {
 	u.render(w, http.StatusOK, "panel", u.view())
+}
+
+func (u *UI) handleRefresh(w http.ResponseWriter, r *http.Request) {
+	u.Log.Info("ui refresh requested")
+
+	_, err := u.backend.RefreshNodes(r.Context())
+
+	v := u.view()
+	if err != nil {
+		v.Message = err.Error()
+		v.Failed = true
+	} else {
+		v.Message = fmt.Sprintf("refreshed %d nodes", len(v.Nodes))
+	}
+
+	u.render(w, utils.ParseErrCode(err), "panel", v)
 }
 
 func (u *UI) handleAction(verb string, do func(context.Context, string) (any, error)) http.HandlerFunc {
