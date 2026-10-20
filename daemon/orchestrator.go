@@ -173,6 +173,7 @@ func (o *Orchestrator) Boot(ctx context.Context, name string) (any, error) {
 			"sentinel currently offline; can't boot any machines.",
 		}, fmt.Errorf("sentinel currently offline; can't boot any machines; %w", apierr.ErrConflict)
 	}
+
 	err := o.Registry.Boot(ctx, name)
 
 	message := ""
