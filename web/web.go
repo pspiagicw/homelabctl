@@ -21,6 +21,7 @@ import (
 	"github.com/pspiagicw/homelabctl/sentinel"
 	"github.com/pspiagicw/homelabctl/service"
 	"github.com/pspiagicw/homelabctl/utils"
+	"github.com/pspiagicw/homelabctl/version"
 )
 
 //go:embed templates static
@@ -62,6 +63,8 @@ type serviceGroup struct {
 }
 
 type view struct {
+	Version  string // e.g. v0.2.0, shown in the header
+	Build    string // version, commit and build date, shown on hover
 	Sentinel *sentinel.SentinelStatus
 	Nodes    []nodeRow
 	Services []serviceGroup
@@ -114,7 +117,11 @@ func (u *UI) Handler() http.Handler {
 
 func (u *UI) view() view {
 	status := u.backend.NodeStates()
-	v := view{Sentinel: u.backend.SentinelState()}
+	v := view{
+		Version:  version.Version,
+		Build:    version.String(),
+		Sentinel: u.backend.SentinelState(),
+	}
 
 	for name, n := range status.Nodes {
 		v.Nodes = append(v.Nodes, nodeRow{name, n})

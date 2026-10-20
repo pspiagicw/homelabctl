@@ -13,6 +13,7 @@ import (
 	"github.com/pspiagicw/homelabctl/node"
 	"github.com/pspiagicw/homelabctl/sentinel"
 	"github.com/pspiagicw/homelabctl/service"
+	"github.com/pspiagicw/homelabctl/version"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -226,4 +227,12 @@ func TestRefreshAction(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, 1, b.refreshed)
 	assert.Contains(t, rec.Body.String(), "refreshed 2 nodes")
+}
+
+func TestHeaderShowsVersion(t *testing.T) {
+	_, h := setupUI(node.ON)
+
+	body := serve(h, http.MethodGet, "/").Body.String()
+
+	assert.Contains(t, body, `class="version" title="`+version.String()+`">`+version.Version+`</span>`)
 }

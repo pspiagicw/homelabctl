@@ -96,6 +96,12 @@ code { font-family: inherit; }
 	letter-spacing: 0.2px;
 }
 .prompt { color: var(--bar-muted); margin-right: 4px; }
+.version {
+	margin-left: 6px;
+	font-size: 12px;
+	font-weight: 400;
+	color: var(--bar-muted);
+}
 .updated { font-size: 12px; color: var(--bar-muted); white-space: nowrap; }
 
 /* Page layout: status panel plus the event history sidebar. */
