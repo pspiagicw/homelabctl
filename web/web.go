@@ -124,6 +124,7 @@ var funcs = template.FuncMap{
 	"join": func(items []string) string {
 		return strings.Join(items, ", ")
 	},
+	"profileAction": profileAction,
 	// initial is the letter shown when a service icon is missing or fails to load.
 	"initial": func(name string) string {
 		for _, r := range name {
@@ -317,4 +318,21 @@ func (u *UI) render(w http.ResponseWriter, code int, name string, v view) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(code)
 	buf.WriteTo(w)
+}
+
+// profileAction describes what applying a profile does, e.g. "Boot
+// falcon-heavy, falcon2 and shut down falcon1". Empty when it does nothing.
+func profileAction(p profile.Profile) string {
+	boot := strings.Join(p.Nodes, ", ")
+	stop := strings.Join(p.ShutsDown, ", ")
+	switch {
+	case boot != "" && stop != "":
+		return "Boot " + boot + " and shut down " + stop
+	case boot != "":
+		return "Boot " + boot
+	case stop != "":
+		return "Shut down " + stop
+	default:
+		return ""
+	}
 }

@@ -167,8 +167,8 @@ These 2 functions are part of command parsing, not loading. Loading should only 
 - [ ] `type Scheduler struct` — holds `config.ScheduleConfig`, `config.Profiles`, reference to `node.Registry`
 - [ ] `func (s *Scheduler) ApplyProfile(ctx context.Context, name string) error` — computes diff between currently-active nodes and target profile's nodes
 - [ ] Boot new nodes in **list order** (respecting `wait_after_boot`/Prober between each, or parallel-with-stagger — decide and document)
-- [ ] Shut down nodes no longer in profile, in **reverse list order** of the *previous* profile
-- [ ] Ignore nodes with `unmanaged: true`: never booted or shut down by profile changes (manual control only)
+- [x] Shut down nodes no longer in profile, in **reverse list order** of the *previous* profile — profile.ApplyProfile shuts down every managed node not in the profile (manual and scheduled)
+- [x] Ignore nodes with `unmanaged: true`: never booted or shut down by profile changes (manual control only) — unmanaged nodes can't be in profiles and are never shut down
 - [x] `func (s *Scheduler) Run(ctx context.Context) error` — main loop: sleep until `NextTransition`, call `ApplyProfile`, repeat; select on ctx.Done() and an interrupt channel (for override/sentinel preemption) — schedule.Scheduler.Watch; applies boot-only profiles at entry times, no interrupt channel yet
 
 ### 4.3 Interruption handling (`internal/scheduler/interrupt.go`)

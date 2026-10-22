@@ -1,11 +1,13 @@
 // Package profile holds the named sets of nodes from the config. Applying a
-// profile boots every node it lists; nodes outside the profile are left alone.
+// profile boots every node it lists and shuts down every other managed node;
+// unmanaged nodes are never touched.
 package profile
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -28,8 +30,9 @@ const (
 const Manual = "manual"
 
 type Profile struct {
-	Name  string   `json:"name"`
-	Nodes []string `json:"nodes"` // boot order
+	Name      string   `json:"name"`
+	Nodes     []string `json:"nodes"`      // boot order
+	ShutsDown []string `json:"shuts_down"` // managed nodes not in the profile, by name
 }
 
 type NodeResult struct {
@@ -73,12 +76,26 @@ type ProfileManager struct {
 }
 
 func NewProfileManager(cfg *config.Config, o backend.API) *ProfileManager {
-	profiles := map[string]Profile{}
+	managed := []string{}
+	for name, node := range cfg.Nodes {
+		if !node.Unmanaged {
+			managed = append(managed, name)
+		}
+	}
+	sort.Strings(managed)
 
+	profiles := map[string]Profile{}
 	for name, profile := range cfg.Profiles {
+		shutsDown := []string{}
+		for _, n := range managed {
+			if !slices.Contains(profile.Nodes, n) {
+				shutsDown = append(shutsDown, n)
+			}
+		}
 		profiles[name] = Profile{
-			Name:  name,
-			Nodes: profile.Nodes,
+			Name:      name,
+			Nodes:     profile.Nodes,
+			ShutsDown: shutsDown,
 		}
 	}
 	return &ProfileManager{
@@ -131,8 +148,11 @@ func (p *ProfileManager) GetProfile(name string) (Profile, error) {
 	return copyProfile(profile), nil
 }
 
-// ApplyProfile boots every node in the profile, in order, and records the
-// result. A node that can't be booted doesn't stop the others.
+// ApplyProfile boots every node in the profile, in order, then shuts down
+// every other managed node, and records the result. A node that can't be
+// booted or shut down doesn't stop the others. Any pending auto-off is
+// cancelled (the latest profile decides what runs); a manual apply schedules
+// a new one for the nodes it booted.
 func (p *ProfileManager) ApplyProfile(ctx context.Context, name, trigger string) (*Applied, error) {
 	profile, err := p.GetProfile(name)
 	if err != nil {
@@ -145,17 +165,22 @@ func (p *ProfileManager) ApplyProfile(ctx context.Context, name, trigger string)
 	applied := &Applied{
 		Profile: name,
 		Trigger: trigger,
-		Nodes:   make([]NodeResult, 0, len(profile.Nodes)),
+		Nodes:   make([]NodeResult, 0, len(profile.Nodes)+len(profile.ShutsDown)),
 	}
 
 	for _, node := range profile.Nodes {
 		_, err := p.b.Boot(ctx, node)
 		applied.Nodes = append(applied.Nodes, result(node, err))
 	}
+	for _, node := range p.shutdownOrder(profile.ShutsDown) {
+		_, err := p.b.Shutdown(ctx, node)
+		applied.Nodes = append(applied.Nodes, ShutdownResult(node, err))
+	}
 	applied.AppliedAt = time.Now()
 
 	p.mu.Lock()
 	p.last = applied
+	p.cancelAutoOff()
 	if trigger == Manual {
 		p.scheduleAutoOff(booted(applied))
 	}
@@ -179,6 +204,32 @@ func result(node string, err error) NodeResult {
 
 // copyProfile returns a profile with its own node slice, never nil, so an
 // empty profile encodes as "nodes": [] rather than null.
+// shutdownOrder puts nodes in shutdown order: the previously applied
+// profile's nodes in reverse boot order first, then the rest by name.
+func (p *ProfileManager) shutdownOrder(nodes []string) []string {
+	p.mu.Lock()
+	var previous []string
+	if p.last != nil {
+		if prev, ok := p.profiles[p.last.Profile]; ok {
+			previous = prev.Nodes
+		}
+	}
+	p.mu.Unlock()
+
+	order := make([]string, 0, len(nodes))
+	for i := len(previous) - 1; i >= 0; i-- {
+		if slices.Contains(nodes, previous[i]) {
+			order = append(order, previous[i])
+		}
+	}
+	for _, n := range nodes {
+		if !slices.Contains(order, n) {
+			order = append(order, n)
+		}
+	}
+	return order
+}
+
 // booted lists the nodes an apply actually woke up.
 func booted(a *Applied) []string {
 	nodes := []string{}
@@ -201,8 +252,7 @@ func ShutdownResult(node string, err error) NodeResult {
 }
 
 func copyProfile(profile Profile) Profile {
-	nodes := make([]string, len(profile.Nodes))
-	copy(nodes, profile.Nodes)
-	profile.Nodes = nodes
+	profile.Nodes = append(make([]string, 0, len(profile.Nodes)), profile.Nodes...)
+	profile.ShutsDown = append(make([]string, 0, len(profile.ShutsDown)), profile.ShutsDown...)
 	return profile
 }

@@ -229,11 +229,88 @@ func TestScheduledApplyHasNoAutoOff(t *testing.T) {
 	}
 }
 
-// TestSecondApplyMergesAndResetsAutoOff checks a later manual apply keeps the
-// earlier nodes pending and pushes the deadline back.
-func TestSecondApplyMergesAndResetsAutoOff(t *testing.T) {
-	p, b := setupManager(nil)
-	p.profiles["backup"] = Profile{Name: "backup", Nodes: []string{"falcon1", "falcon-heavy"}}
+// setupSwitching creates a manager over three managed nodes and one unmanaged
+// node, with "movie" (falcon-heavy, falcon2), "backup" (falcon1, falcon-heavy)
+// and "off" (nothing).
+func setupSwitching() (*ProfileManager, *fakeBackend) {
+	b := &fakeBackend{}
+	cfg := &config.Config{
+		Nodes: map[string]config.NodeConfig{
+			"falcon-heavy": {}, "falcon1": {}, "falcon2": {},
+			"starship": {Unmanaged: true},
+		},
+		Profiles: map[string]config.ProfileConfig{
+			"movie":  {Nodes: []string{"falcon-heavy", "falcon2"}},
+			"backup": {Nodes: []string{"falcon1", "falcon-heavy"}},
+			"off":    {Nodes: []string{}},
+		},
+	}
+	return NewProfileManager(cfg, b), b
+}
+
+func TestProfileListsWhatItShutsDown(t *testing.T) {
+	p, _ := setupSwitching()
+
+	movie, _ := p.GetProfile("movie")
+	off, _ := p.GetProfile("off")
+
+	if fmt.Sprint(movie.ShutsDown) != "[falcon1]" {
+		t.Errorf("movie shuts down %v, want [falcon1]", movie.ShutsDown)
+	}
+	// Unmanaged starship is never shut down, not even by "off".
+	if fmt.Sprint(off.ShutsDown) != "[falcon-heavy falcon1 falcon2]" {
+		t.Errorf("off shuts down %v, want every managed node", off.ShutsDown)
+	}
+}
+
+func TestApplyShutsDownOtherManagedNodes(t *testing.T) {
+	p, b := setupSwitching()
+
+	applied, _ := p.ApplyProfile(context.Background(), "movie", "schedule")
+
+	if got := b.shutdowns(); fmt.Sprint(got) != "[falcon1]" {
+		t.Errorf("shut down %v, want [falcon1]", got)
+	}
+	last := applied.Nodes[len(applied.Nodes)-1]
+	if last.Node != "falcon1" || last.Result != ShuttingDown {
+		t.Errorf("last result = %+v, want falcon1 shutting", last)
+	}
+}
+
+// TestSwitchShutsDownInReversePreviousOrder checks nodes from the previous
+// profile go down in reverse of its boot order.
+func TestSwitchShutsDownInReversePreviousOrder(t *testing.T) {
+	p, b := setupSwitching()
+
+	p.ApplyProfile(context.Background(), "backup", "schedule") // falcon1, falcon-heavy
+	p.ApplyProfile(context.Background(), "off", "schedule")
+
+	// "off" shuts down everything: backup's nodes reversed, then the rest.
+	got := b.shutdowns()[1:] // the first shutdown came from applying backup (falcon2)
+	if fmt.Sprint(got) != "[falcon-heavy falcon1 falcon2]" {
+		t.Errorf("shut down %v, want [falcon-heavy falcon1 falcon2]", got)
+	}
+}
+
+// TestApplyCancelsPendingAutoOff checks a later apply, of any kind, replaces
+// an earlier manual apply's auto-off, so it can't shut down nodes the new
+// profile needs.
+func TestApplyCancelsPendingAutoOff(t *testing.T) {
+	p, _ := setupSwitching()
+
+	p.ApplyProfile(context.Background(), "movie", Manual)
+	if p.ListProfiles().AutoOff == nil {
+		t.Fatal("no auto-off after a manual apply")
+	}
+	p.ApplyProfile(context.Background(), "backup", "schedule")
+
+	if pending := p.ListProfiles().AutoOff; pending != nil {
+		t.Errorf("AutoOff = %+v, want cancelled by the scheduled apply", pending)
+	}
+}
+
+func TestSecondManualApplyReplacesAutoOff(t *testing.T) {
+	p, _ := setupSwitching()
 
 	p.ApplyProfile(context.Background(), "movie", Manual)
 	first := p.ListProfiles().AutoOff.At
@@ -241,13 +318,10 @@ func TestSecondApplyMergesAndResetsAutoOff(t *testing.T) {
 	p.ApplyProfile(context.Background(), "backup", Manual)
 
 	pending := p.ListProfiles().AutoOff
-	if fmt.Sprint(pending.Nodes) != "[falcon-heavy falcon2 falcon1]" {
-		t.Errorf("pending nodes %v, want movie's nodes plus falcon1", pending.Nodes)
+	if fmt.Sprint(pending.Nodes) != "[falcon1 falcon-heavy]" {
+		t.Errorf("pending nodes %v, want only backup's booted nodes", pending.Nodes)
 	}
 	if !pending.At.After(first) {
 		t.Errorf("deadline not reset: %v, first %v", pending.At, first)
-	}
-	if len(b.shutdowns()) != 0 {
-		t.Errorf("shut down early: %v", b.shutdowns())
 	}
 }

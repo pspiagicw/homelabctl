@@ -323,8 +323,9 @@ func TestServiceTileShowsHealth(t *testing.T) {
 func setupProfilesUI(state string) *fakeBackend {
 	b, _ := setupUI(state)
 	b.profiles = profile.ProfileStatus{Profiles: []profile.Profile{
-		{Name: "movie", Nodes: []string{"falcon-heavy", "falcon1"}},
-		{Name: "off", Nodes: []string{}},
+		{Name: "movie", Nodes: []string{"falcon-heavy", "falcon1"}, ShutsDown: []string{"falcon2"}},
+		{Name: "off", Nodes: []string{}, ShutsDown: []string{"falcon-heavy", "falcon1", "falcon2"}},
+		{Name: "empty"},
 	}}
 	return b
 }
@@ -340,10 +341,12 @@ func TestProfileButtonsRender(t *testing.T) {
 	body := serve(New(b).Handler(), http.MethodGet, "/nodes").Body.String()
 
 	assert.Regexp(t, profileButton("movie"), body)
-	assert.Contains(t, body, `hx-confirm="Boot falcon-heavy, falcon1?"`)
+	assert.Contains(t, body, `hx-confirm="Boot falcon-heavy, falcon1 and shut down falcon2?"`)
 	assert.NotRegexp(t, `(?s)hx-post="/ui/profiles/movie/apply"[^>]*\sdisabled>`, body)
-	// An empty profile has nothing to boot.
-	assert.Regexp(t, `(?s)hx-post="/ui/profiles/off/apply"[^>]*title="Nothing to boot" disabled>`, body)
+	// "off" only shuts down; a profile with nothing to boot or shut down is disabled.
+	assert.Contains(t, body, `hx-confirm="Shut down falcon-heavy, falcon1, falcon2?"`)
+	assert.NotRegexp(t, `(?s)hx-post="/ui/profiles/off/apply"[^>]*\sdisabled>`, body)
+	assert.Regexp(t, `(?s)hx-post="/ui/profiles/empty/apply"[^>]*title="Nothing to do" disabled>`, body)
 }
 
 func TestProfileButtonsDisabledDuringOutage(t *testing.T) {
@@ -442,4 +445,19 @@ func TestScheduleShownOnProfilesCard(t *testing.T) {
 
 	assert.Contains(t, body, "next <b>movie</b> at 12:30")
 	assert.Contains(t, body, "last: backup at 09:00 refused")
+}
+
+func TestProfileAction(t *testing.T) {
+	tests := []struct {
+		p    profile.Profile
+		want string
+	}{
+		{profile.Profile{Nodes: []string{"a", "b"}, ShutsDown: []string{"c"}}, "Boot a, b and shut down c"},
+		{profile.Profile{Nodes: []string{"a"}}, "Boot a"},
+		{profile.Profile{ShutsDown: []string{"a", "b"}}, "Shut down a, b"},
+		{profile.Profile{}, ""},
+	}
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, profileAction(tt.p))
+	}
 }

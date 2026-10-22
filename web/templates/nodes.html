@@ -52,7 +52,7 @@
 	<header class="card-head">
 		<div>
 			<span class="label">profiles</span>
-			<h2>boot a set of nodes</h2>
+			<h2>switch the active set of nodes</h2>
 		</div>
 	</header>
 
@@ -61,8 +61,8 @@
 		{{$active := and $.Profiles.LastApplied (eq $.Profiles.LastApplied.Profile .Name)}}
 		<button class="btn-text profile-btn{{if $active}} profile-active{{end}}" type="button"
 			hx-post="/ui/profiles/{{.Name}}/apply" hx-target="#panel" hx-disabled-elt="this"
-			hx-confirm="Boot {{join .Nodes}}?"
-			{{if not .Nodes}}title="Nothing to boot" disabled{{else if not $normal}}title="Profiles are blocked while the sentinel is not Normal" disabled{{else}}title="Boots {{join .Nodes}}"{{end}}>
+			hx-confirm="{{profileAction .}}?"
+			{{if not (profileAction .)}}title="Nothing to do" disabled{{else if not $normal}}title="Profiles are blocked while the sentinel is not Normal" disabled{{else}}title="{{profileAction .}}"{{end}}>
 			{{.Name}}<span class="profile-count">{{len .Nodes}}</span>
 		</button>
 		{{end}}

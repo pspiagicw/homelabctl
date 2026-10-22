@@ -3,7 +3,6 @@ package profile
 import (
 	"context"
 	"log/slog"
-	"slices"
 	"time"
 )
 
@@ -23,35 +22,33 @@ type AutoOffRun struct {
 	Nodes []NodeResult `json:"nodes"`
 }
 
-// scheduleAutoOff adds the nodes a manual apply booted to the pending
-// auto-off and restarts its timer, so nothing booted by hand runs forever and
-// nothing just booted is switched off early. Callers hold p.mu.
+// scheduleAutoOff shuts the nodes a manual apply booted down again after
+// autoOffAfter. Callers hold p.mu and have cancelled any earlier auto-off.
 func (p *ProfileManager) scheduleAutoOff(booted []string) {
 	if len(booted) == 0 {
 		return
 	}
 
-	nodes := []string{}
-	if p.autoOff != nil {
-		nodes = append(nodes, p.autoOff.Nodes...)
-	}
-	for _, n := range booted {
-		if !slices.Contains(nodes, n) {
-			nodes = append(nodes, n)
-		}
-	}
+	// Each schedule gets a new generation, so a timer that already fired
+	// while being cancelled can't run a newer auto-off early.
+	p.autoOffGen++
+	gen := p.autoOffGen
+	p.autoOff = &AutoOff{At: time.Now().Add(autoOffAfter), Nodes: booted}
+	p.timer = time.AfterFunc(autoOffAfter, func() { p.runAutoOff(gen) })
 
+	slog.Info("profile auto-off scheduled", "at", p.autoOff.At, "nodes", booted)
+}
+
+// cancelAutoOff drops any pending auto-off. Callers hold p.mu.
+func (p *ProfileManager) cancelAutoOff() {
 	if p.timer != nil {
 		p.timer.Stop()
 	}
-	// Each schedule gets a new generation, so a timer that already fired
-	// while being replaced can't run the newer auto-off early.
+	if p.autoOff != nil {
+		slog.Info("profile auto-off cancelled", "nodes", p.autoOff.Nodes)
+	}
+	p.autoOff, p.timer = nil, nil
 	p.autoOffGen++
-	gen := p.autoOffGen
-	p.autoOff = &AutoOff{At: time.Now().Add(autoOffAfter), Nodes: nodes}
-	p.timer = time.AfterFunc(autoOffAfter, func() { p.runAutoOff(gen) })
-
-	slog.Info("profile auto-off scheduled", "at", p.autoOff.At, "nodes", nodes)
 }
 
 // runAutoOff shuts down the pending nodes in reverse boot order, unless the
