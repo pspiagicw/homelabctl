@@ -42,6 +42,38 @@
 	</button>
 </section>
 
+{{with .Profiles}}{{if .Profiles}}
+<section class="card profiles" aria-label="Profiles">
+	<header class="card-head">
+		<div>
+			<span class="label">profiles</span>
+			<h2>boot a set of nodes</h2>
+		</div>
+	</header>
+
+	<div class="profile-buttons">
+		{{range .Profiles}}
+		{{$active := and $.Profiles.LastApplied (eq $.Profiles.LastApplied.Profile .Name)}}
+		<button class="btn-text profile-btn{{if $active}} profile-active{{end}}" type="button"
+			hx-post="/ui/profiles/{{.Name}}/apply" hx-target="#panel" hx-disabled-elt="this"
+			hx-confirm="Boot {{join .Nodes}}?"
+			{{if not .Nodes}}title="Nothing to boot" disabled{{else if not $normal}}title="Profiles are blocked while the sentinel is not Normal" disabled{{else}}title="Boots {{join .Nodes}}"{{end}}>
+			{{.Name}}<span class="profile-count">{{len .Nodes}}</span>
+		</button>
+		{{end}}
+	</div>
+
+	{{with .LastApplied}}
+	<p class="profile-last">
+		<span class="label">last applied</span>
+		<b>{{.Profile}}</b>
+		<span>{{.Trigger}} · {{template "time" .AppliedAt}}</span>
+		{{range .Nodes}}<span class="result result-{{.Result}}"{{with .Message}} title="{{.}}"{{end}}>{{.Node}} {{.Result}}</span>{{end}}
+	</p>
+	{{end}}
+</section>
+{{end}}{{end}}
+
 {{with .Message}}
 {{/* Read by ui.js into the event history; not shown inline. */}}
 <div class="snack{{if $.Failed}} snack-error{{end}}" data-message="{{.}}" data-failed="{{$.Failed}}" hidden></div>

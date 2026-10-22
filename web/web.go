@@ -18,6 +18,7 @@ import (
 	"github.com/pspiagicw/homelabctl/catalog"
 	"github.com/pspiagicw/homelabctl/logging"
 	"github.com/pspiagicw/homelabctl/node"
+	"github.com/pspiagicw/homelabctl/profile"
 	"github.com/pspiagicw/homelabctl/sentinel"
 	"github.com/pspiagicw/homelabctl/utils"
 	"github.com/pspiagicw/homelabctl/version"
@@ -32,6 +33,8 @@ type Backend interface {
 	NodeStates() *node.RegistryStatus
 	SentinelState() *sentinel.SentinelStatus
 	Services() *catalog.List
+	ProfileStatus() *profile.ProfileStatus
+	ApplyProfile(ctx context.Context, name string) (any, error)
 	RefreshNodes(ctx context.Context) (any, error)
 	Boot(ctx context.Context, name string) (any, error)
 	Shutdown(ctx context.Context, name string) (any, error)
@@ -98,6 +101,7 @@ type view struct {
 	Sentinel *sentinel.SentinelStatus
 	Nodes    []nodeRow
 	Services []serviceGroup
+	Profiles *profile.ProfileStatus
 	Message  string
 	Failed   bool
 }
@@ -112,6 +116,9 @@ var funcs = template.FuncMap{
 			return "never"
 		}
 		return t.Format("Jan 2, 15:04:05")
+	},
+	"join": func(items []string) string {
+		return strings.Join(items, ", ")
 	},
 	// initial is the letter shown when a service icon is missing or fails to load.
 	"initial": func(name string) string {
@@ -139,6 +146,7 @@ func (u *UI) Handler() http.Handler {
 	r.Post("/nodes/{name}/boot", u.handleAction("boot", u.backend.Boot))
 	r.Post("/nodes/{name}/shutdown", u.handleAction("shutdown", u.backend.Shutdown))
 	r.Post("/nodes/refresh", u.handleRefresh)
+	r.Post("/profiles/{name}/apply", u.handleApplyProfile)
 	r.Get("/static/*", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFileFS(w, r, u.static, chi.URLParam(r, "*"))
 	})
@@ -162,6 +170,7 @@ func (u *UI) view() view {
 	for _, n := range v.Nodes {
 		states[n.Name] = n.PowerState
 	}
+	v.Profiles = u.backend.ProfileStatus()
 	v.Services = groupServices(u.backend.Services().Services, states)
 
 	return v
@@ -199,6 +208,42 @@ func (u *UI) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 func (u *UI) handleNodes(w http.ResponseWriter, r *http.Request) {
 	u.render(w, http.StatusOK, "panel", u.view())
+}
+
+func (u *UI) handleApplyProfile(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	u.Log.Info("ui profile apply requested", "profile", name)
+
+	_, err := u.backend.ApplyProfile(r.Context(), name)
+
+	v := u.view()
+	switch {
+	case err != nil:
+		v.Message = err.Error()
+		v.Failed = true
+	case v.Profiles.LastApplied != nil:
+		v.Message, v.Failed = appliedMessage(v.Profiles.LastApplied)
+	}
+
+	u.render(w, utils.ParseErrCode(err), "panel", v)
+}
+
+// appliedMessage summarises a profile apply for the event history, e.g.
+// "applied movie: booting falcon-heavy, skipped falcon2". It counts as failed
+// when any node failed to boot.
+func appliedMessage(a *profile.Applied) (string, bool) {
+	if len(a.Nodes) == 0 {
+		return fmt.Sprintf("applied %s: nothing to boot", a.Profile), false
+	}
+
+	failed := false
+	parts := make([]string, 0, len(a.Nodes))
+	for _, n := range a.Nodes {
+		parts = append(parts, n.Result+" "+n.Node)
+		failed = failed || n.Result == profile.Failed
+	}
+
+	return fmt.Sprintf("applied %s: %s", a.Profile, strings.Join(parts, ", ")), failed
 }
 
 func (u *UI) handleRefresh(w http.ResponseWriter, r *http.Request) {

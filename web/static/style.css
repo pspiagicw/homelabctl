@@ -222,6 +222,55 @@ main { min-width: 0; }
 .summary b { color: var(--on-surface); font-weight: 600; }
 .summary { align-items: center; }
 .btn-refresh { margin-left: auto; padding: 4px 10px; }
+
+/* Profiles: one outlined button per profile; the last applied one is accented. */
+.profiles { margin-bottom: 16px; }
+.profile-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 14px;
+}
+.profile-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 7px 12px;
+	font-size: 13px;
+	color: var(--on-surface);
+}
+.profile-btn:disabled { cursor: not-allowed; opacity: 0.5; }
+.profile-btn.htmx-request { cursor: progress; opacity: 0.6; }
+.profile-active { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.profile-count {
+	padding: 0 6px;
+	border-radius: 3px;
+	background: var(--chip-off);
+	color: var(--chip-off-fg);
+	font-size: 11px;
+	font-weight: 400;
+}
+
+.profile-last {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 6px 10px;
+	margin: 14px 0 0;
+	padding-top: 14px;
+	border-top: 1px dashed var(--outline);
+	font-size: 12.5px;
+	color: var(--muted);
+}
+.profile-last b { color: var(--on-surface); }
+.result {
+	padding: 0 6px;
+	border-radius: 3px;
+	background: var(--chip-off);
+	color: var(--chip-off-fg);
+}
+.result-booting { background: var(--ok-bg); color: var(--ok-fg); }
+.result-failed { background: var(--error-bg); color: var(--error-fg); }
 .btn-refresh .when-busy { display: none; }
 .btn-refresh.htmx-request { cursor: progress; }
 .btn-refresh.htmx-request .when-idle { display: none; }

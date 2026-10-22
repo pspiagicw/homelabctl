@@ -13,6 +13,7 @@ import (
 	"github.com/pspiagicw/homelabctl/catalog"
 	"github.com/pspiagicw/homelabctl/config"
 	"github.com/pspiagicw/homelabctl/node"
+	"github.com/pspiagicw/homelabctl/profile"
 	"github.com/pspiagicw/homelabctl/sentinel"
 	"github.com/pspiagicw/homelabctl/version"
 	"github.com/stretchr/testify/assert"
@@ -26,6 +27,33 @@ type fakeBackend struct {
 	booted    string
 	bootErr   error
 	refreshed int // number of RefreshNodes calls
+	profiles  profile.ProfileStatus
+	applied   string // profile passed to ApplyProfile
+	applyErr  error
+}
+
+// ProfileStatus returns a copy so a test's later changes don't leak in.
+func (f *fakeBackend) ProfileStatus() *profile.ProfileStatus {
+	status := f.profiles
+	return &status
+}
+
+// ApplyProfile records the call and, like the real one, sets LastApplied.
+func (f *fakeBackend) ApplyProfile(_ context.Context, name string) (any, error) {
+	f.applied = name
+	if f.applyErr != nil {
+		return nil, f.applyErr
+	}
+	f.profiles.LastApplied = &profile.Applied{
+		Profile:   name,
+		Trigger:   "manual",
+		AppliedAt: time.Now(),
+		Nodes: []profile.NodeResult{
+			{Node: "falcon-heavy", Result: profile.Booting},
+			{Node: "falcon1", Result: profile.Skipped, Message: "node online"},
+		},
+	}
+	return f.profiles.LastApplied, nil
 }
 
 func (f *fakeBackend) NodeStates() *node.RegistryStatus {
@@ -275,4 +303,72 @@ func TestServiceTileShowsHealth(t *testing.T) {
 
 	assert.Contains(t, body, `class="health health-up"`)
 	assert.Contains(t, body, "up · checked")
+}
+
+// setupProfilesUI adds a two-node "movie" profile and an empty "off" profile.
+func setupProfilesUI(state string) *fakeBackend {
+	b, _ := setupUI(state)
+	b.profiles = profile.ProfileStatus{Profiles: []profile.Profile{
+		{Name: "movie", Nodes: []string{"falcon-heavy", "falcon1"}},
+		{Name: "off", Nodes: []string{}},
+	}}
+	return b
+}
+
+// profileButton matches a profile's apply button up to the end of its tag.
+func profileButton(name string) *regexp.Regexp {
+	return regexp.MustCompile(`(?s)hx-post="/ui/profiles/` + name + `/apply"[^>]*>`)
+}
+
+func TestProfileButtonsRender(t *testing.T) {
+	b := setupProfilesUI(node.OFF)
+
+	body := serve(New(b).Handler(), http.MethodGet, "/nodes").Body.String()
+
+	assert.Regexp(t, profileButton("movie"), body)
+	assert.Contains(t, body, `hx-confirm="Boot falcon-heavy, falcon1?"`)
+	assert.NotRegexp(t, `(?s)hx-post="/ui/profiles/movie/apply"[^>]*\sdisabled>`, body)
+	// An empty profile has nothing to boot.
+	assert.Regexp(t, `(?s)hx-post="/ui/profiles/off/apply"[^>]*title="Nothing to boot" disabled>`, body)
+}
+
+func TestProfileButtonsDisabledDuringOutage(t *testing.T) {
+	b := setupProfilesUI(node.OFF)
+	b.sentinel = sentinel.OutageConfirmed
+
+	body := serve(New(b).Handler(), http.MethodGet, "/nodes").Body.String()
+
+	assert.Regexp(t, `(?s)hx-post="/ui/profiles/movie/apply"[^>]*sentinel is not Normal" disabled>`, body)
+}
+
+func TestNoProfilesHidesSection(t *testing.T) {
+	_, h := setupUI(node.OFF)
+
+	body := serve(h, http.MethodGet, "/nodes").Body.String()
+
+	assert.NotContains(t, body, `class="card profiles"`)
+}
+
+func TestApplyProfileAction(t *testing.T) {
+	b := setupProfilesUI(node.OFF)
+
+	rec := serve(New(b).Handler(), http.MethodPost, "/profiles/movie/apply")
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "movie", b.applied)
+	assert.Contains(t, rec.Body.String(), "applied movie: booting falcon-heavy, skipped falcon1")
+	// The applied profile is marked and its per-node results are shown.
+	assert.Contains(t, rec.Body.String(), "profile-btn profile-active")
+	assert.Contains(t, rec.Body.String(), `class="result result-skipped" title="node online"`)
+}
+
+func TestApplyProfileActionRefused(t *testing.T) {
+	b := setupProfilesUI(node.OFF)
+	b.applyErr = fmt.Errorf("sentinel not Normal; profile movie not applied; %w", apierr.ErrConflict)
+
+	rec := serve(New(b).Handler(), http.MethodPost, "/profiles/movie/apply")
+
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Contains(t, rec.Body.String(), "sentinel not Normal")
+	assert.Contains(t, rec.Body.String(), "snack-error")
 }
