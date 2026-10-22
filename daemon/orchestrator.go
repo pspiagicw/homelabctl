@@ -6,17 +6,17 @@ import (
 	"sync"
 
 	"github.com/pspiagicw/homelabctl/api"
+	"github.com/pspiagicw/homelabctl/catalog"
 	"github.com/pspiagicw/homelabctl/config"
 	"github.com/pspiagicw/homelabctl/node"
 	"github.com/pspiagicw/homelabctl/sentinel"
-	"github.com/pspiagicw/homelabctl/service"
 	"github.com/pspiagicw/homelabctl/web"
 )
 
 type Orchestrator struct {
 	Registry *node.Registry
 	Sentinel *sentinel.Sentinel
-	Service  *service.Service
+	Catalog  *catalog.Catalog
 	Server   *api.Server
 }
 
@@ -24,7 +24,7 @@ func NewOrchestrator(cfg *config.Config) *Orchestrator {
 	o := &Orchestrator{}
 	o.Registry = node.NewRegistry(cfg)
 	o.Sentinel = sentinel.NewSentinel(cfg, o)
-	o.Service = service.NewService(cfg)
+	o.Catalog = catalog.NewCatalog(cfg)
 	o.Server = api.NewServer(cfg, o)
 	o.Server.UI = web.New(o).Handler()
 
@@ -70,12 +70,12 @@ func (o *Orchestrator) Start(ctx context.Context) {
 	wg.Wait()
 }
 
-func (o *Orchestrator) Services() *service.ServiceList {
-	return o.Service.GetServices()
+func (o *Orchestrator) Services() *catalog.List {
+	return o.Catalog.List()
 }
 
 func (o *Orchestrator) ListServices(ctx context.Context) (any, error) {
-	list := o.Service.GetServices()
+	list := o.Catalog.List()
 
 	return list, nil
 }

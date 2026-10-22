@@ -9,10 +9,10 @@ import (
 	"testing"
 
 	"github.com/pspiagicw/homelabctl/apierr"
+	"github.com/pspiagicw/homelabctl/catalog"
 	"github.com/pspiagicw/homelabctl/config"
 	"github.com/pspiagicw/homelabctl/node"
 	"github.com/pspiagicw/homelabctl/sentinel"
-	"github.com/pspiagicw/homelabctl/service"
 	"github.com/pspiagicw/homelabctl/version"
 	"github.com/stretchr/testify/assert"
 )
@@ -40,8 +40,8 @@ func (f *fakeBackend) RefreshNodes(_ context.Context) (any, error) {
 	f.refreshed++
 	return nil, nil
 }
-func (f *fakeBackend) Services() *service.ServiceList {
-	return &service.ServiceList{Services: f.services}
+func (f *fakeBackend) Services() *catalog.List {
+	return &catalog.List{Services: f.services}
 }
 func (f *fakeBackend) Boot(_ context.Context, name string) (any, error) {
 	f.booted = name

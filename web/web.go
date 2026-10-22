@@ -15,11 +15,11 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/pspiagicw/homelabctl/catalog"
 	"github.com/pspiagicw/homelabctl/config"
 	"github.com/pspiagicw/homelabctl/logging"
 	"github.com/pspiagicw/homelabctl/node"
 	"github.com/pspiagicw/homelabctl/sentinel"
-	"github.com/pspiagicw/homelabctl/service"
 	"github.com/pspiagicw/homelabctl/utils"
 	"github.com/pspiagicw/homelabctl/version"
 )
@@ -32,7 +32,7 @@ var assets embed.FS
 type Backend interface {
 	NodeStates() *node.RegistryStatus
 	SentinelState() *sentinel.SentinelStatus
-	Services() *service.ServiceList
+	Services() *catalog.List
 	RefreshNodes(ctx context.Context) (any, error)
 	Boot(ctx context.Context, name string) (any, error)
 	Shutdown(ctx context.Context, name string) (any, error)
