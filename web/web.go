@@ -16,7 +16,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/pspiagicw/homelabctl/catalog"
-	"github.com/pspiagicw/homelabctl/config"
 	"github.com/pspiagicw/homelabctl/logging"
 	"github.com/pspiagicw/homelabctl/node"
 	"github.com/pspiagicw/homelabctl/sentinel"
@@ -52,7 +51,7 @@ type nodeRow struct {
 
 // serviceTile is a service plus what the dashboard shows about it.
 type serviceTile struct {
-	config.ServiceConfig
+	catalog.CatalogService
 	Host      string // host[:port] from URL, shown under the description
 	NodeState string // power state of Node; empty when Node is unset
 }
@@ -139,12 +138,12 @@ func (u *UI) view() view {
 
 // groupServices keeps config order: groups in first-seen order, and services
 // in list order within each group.
-func groupServices(services []config.ServiceConfig, states map[string]string) []serviceGroup {
+func groupServices(services []*catalog.CatalogService, states map[string]string) []serviceGroup {
 	var groups []serviceGroup
 	index := make(map[string]int)
 
 	for _, s := range services {
-		tile := serviceTile{ServiceConfig: s, Host: s.URL, NodeState: states[s.Node]}
+		tile := serviceTile{CatalogService: *s, Host: s.URL, NodeState: states[s.Node]}
 		if parsed, err := url.Parse(s.URL); err == nil && parsed.Host != "" {
 			tile.Host = parsed.Host
 		}

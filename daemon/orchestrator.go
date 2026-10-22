@@ -53,7 +53,7 @@ func (o *Orchestrator) Init() {
 func (o *Orchestrator) Start(ctx context.Context) {
 	slog.Info("orchestrator started!")
 	var wg sync.WaitGroup
-	wg.Add(3)
+	wg.Add(4)
 	go func() {
 		o.Server.Run(ctx)
 		wg.Done()
@@ -64,6 +64,10 @@ func (o *Orchestrator) Start(ctx context.Context) {
 	}()
 	go func() {
 		o.Registry.Watch(ctx)
+		wg.Done()
+	}()
+	go func() {
+		o.Catalog.Watch(ctx)
 		wg.Done()
 	}()
 

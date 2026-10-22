@@ -20,7 +20,7 @@ import (
 // fakeBackend records the node passed to Boot/Shutdown and returns bootErr from Boot.
 type fakeBackend struct {
 	nodes     map[string]*node.NodeStatus
-	services  []config.ServiceConfig
+	services  []*catalog.CatalogService
 	sentinel  string // defaults to Normal when empty
 	booted    string
 	bootErr   error
@@ -158,11 +158,13 @@ func TestStaticAssets(t *testing.T) {
 // setupServicesUI adds services to a UI whose nodes are all in the given state.
 func setupServicesUI(state string) http.Handler {
 	b, _ := setupUI(state)
-	b.services = []config.ServiceConfig{
+	for _, s := range []config.ServiceConfig{
 		{Name: "Jellyfin", URL: "http://192.168.10.91:8096", Group: "Media", Node: "falcon-heavy"},
 		{Name: "PiHole", URL: "http://192.168.10.92/admin", Group: "Infrastructure"},
 		{Name: "Immich", URL: "http://192.168.10.99:2283", Group: "Media"},
 		{Name: "Homer", URL: "http://192.168.10.85:8010"},
+	} {
+		b.services = append(b.services, &catalog.CatalogService{ServiceConfig: s})
 	}
 	return New(b).Handler()
 }
