@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,33 @@ import (
 	"github.com/pspiagicw/homelabctl/config"
 	"golang.org/x/crypto/ssh"
 )
+
+func HTTPCheck(url string) bool {
+	client := &http.Client{
+		Timeout: 3 * time.Second,
+
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+
+		Transport: &http.Transport{
+			DisableKeepAlives: true,
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
+	}
+
+	response, err := client.Get(url)
+
+	if err != nil {
+		return false
+	}
+
+	defer response.Body.Close()
+
+	return response.StatusCode < 500
+}
 
 func After(d time.Duration) <-chan time.Time {
 	t := time.NewTimer(d)

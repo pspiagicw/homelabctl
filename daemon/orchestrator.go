@@ -33,7 +33,7 @@ func NewOrchestrator(cfg *config.Config) *Orchestrator {
 
 func (o *Orchestrator) Init() {
 	var wg sync.WaitGroup
-	wg.Add(3)
+	wg.Add(4)
 	go func() {
 		o.Registry.Init()
 		wg.Done()
@@ -44,6 +44,10 @@ func (o *Orchestrator) Init() {
 	}()
 	go func() {
 		o.Server.Init()
+		wg.Done()
+	}()
+	go func() {
+		o.Catalog.Init()
 		wg.Done()
 	}()
 	wg.Wait()
