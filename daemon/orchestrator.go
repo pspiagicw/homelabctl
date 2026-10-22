@@ -169,22 +169,13 @@ func (o *Orchestrator) Shutdown(ctx context.Context, name string) (any, error) {
 
 // TODO: Check if we need to send only true/false or node info too!
 func (o *Orchestrator) Boot(ctx context.Context, name string) (any, error) {
-	// n, ok := o.Registry.Nodes[name]
-	// if !ok {
-	// 	err := fmt.Errorf("boot requested on invalid node; node: %s; %w", name, apierr.ErrNotFound)
-	// 	return Response{
-	// 		false,
-	// 		err.Error(),
-	// 	}, err
-	// }
-	//
-	// // Unmanaged nodes are outside the sentinel's control, so an outage doesn't block them.
-	// if !n.Unmanaged() && o.Sentinel.State != sentinel.Normal {
-	// 	return Response{
-	// 		false,
-	// 		"sentinel currently offline; can't boot any machines.",
-	// 	}, fmt.Errorf("sentinel currently offline; can't boot any machines; %w", apierr.ErrConflict)
-	// }
+	// Managed nodes can't boot while the sentinel isn't Normal: that would wake
+	// them onto battery power. Unmanaged nodes are outside the sentinel's
+	// control. Unknown nodes fall through to Registry.Boot, which returns 404.
+	if n, ok := o.Registry.Nodes[name]; ok && !n.Unmanaged() && o.Sentinel.State != sentinel.Normal {
+		err := fmt.Errorf("sentinel currently offline; can't boot any machines; %w", apierr.ErrConflict)
+		return Response{false, err.Error()}, err
+	}
 
 	err := o.Registry.Boot(ctx, name)
 
