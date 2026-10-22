@@ -20,12 +20,6 @@ type Server struct {
 
 	// UI is the web interface, mounted at /ui when set.
 	UI http.Handler
-
-	// StatusFunc   func(context.Context) []byte
-	// BootFunc     func(context.Context, string) []byte
-	// ShutdownFunc func(context.Context, string) []byte
-	// NodesFunc    func(context.Context) []byte
-	// NodeFunc     func(context.Context, string) []byte
 }
 
 func NewServer(config *config.Config, b backend.API) *Server {
@@ -36,14 +30,6 @@ func NewServer(config *config.Config, b backend.API) *Server {
 
 	return s
 }
-
-// func (s *Server) SetFunc(statusFunc func(context.Context) []byte, bootFunc func(context.Context, string) []byte, shutdownFunc func(context.Context, string) []byte, nodesFunc func(context.Context) []byte, nodeFunc func(context.Context, string) []byte) {
-// 	s.StatusFunc = statusFunc
-// 	s.BootFunc = bootFunc
-// 	s.ShutdownFunc = shutdownFunc
-// 	s.NodesFunc = nodesFunc
-// 	s.NodeFunc = nodeFunc
-// }
 
 func (s *Server) Init() {
 	s.router = chi.NewRouter()

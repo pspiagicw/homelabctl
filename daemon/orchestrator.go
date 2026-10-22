@@ -2,12 +2,10 @@ package daemon
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"sync"
 
 	"github.com/pspiagicw/homelabctl/api"
-	"github.com/pspiagicw/homelabctl/apierr"
 	"github.com/pspiagicw/homelabctl/config"
 	"github.com/pspiagicw/homelabctl/node"
 	"github.com/pspiagicw/homelabctl/sentinel"
@@ -22,16 +20,6 @@ type Orchestrator struct {
 	Server   *api.Server
 }
 
-type DaemonStatus struct {
-	Sentinel *sentinel.SentinelStatus `json:"sentinel"`
-	Registry *node.RegistryStatus     `json:"registry"`
-}
-
-type Response struct {
-	Status  bool   `json:"status"`
-	Message string `json:"message"`
-}
-
 func NewOrchestrator(cfg *config.Config) *Orchestrator {
 	o := &Orchestrator{}
 	o.Registry = node.NewRegistry(cfg)
@@ -41,6 +29,45 @@ func NewOrchestrator(cfg *config.Config) *Orchestrator {
 	o.Server.UI = web.New(o).Handler()
 
 	return o
+}
+
+func (o *Orchestrator) Init() {
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		o.Registry.Init()
+		wg.Done()
+	}()
+	go func() {
+		o.Sentinel.Init()
+		wg.Done()
+	}()
+	go func() {
+		o.Server.Init()
+		wg.Done()
+	}()
+	wg.Wait()
+	slog.Info("initialization completed!")
+}
+
+func (o *Orchestrator) Start(ctx context.Context) {
+	slog.Info("orchestrator started!")
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		o.Server.Run(ctx)
+		wg.Done()
+	}()
+	go func() {
+		o.Sentinel.Watch(ctx)
+		wg.Done()
+	}()
+	go func() {
+		o.Registry.Watch(ctx)
+		wg.Done()
+	}()
+
+	wg.Wait()
 }
 
 func (o *Orchestrator) Services() *service.ServiceList {
@@ -85,12 +112,6 @@ func (o *Orchestrator) ListNodes(ctx context.Context) (any, error) {
 	return r, nil
 }
 
-// RefreshNodes re-pings every node now and returns the updated status.
-func (o *Orchestrator) RefreshNodes(ctx context.Context) (any, error) {
-	o.Registry.RefreshAll()
-
-	return o.Registry.Status(), nil
-}
 func (o *Orchestrator) Status(ctx context.Context) (any, error) {
 	s := o.Sentinel.Status()
 	r := o.Registry.Status()
@@ -101,23 +122,11 @@ func (o *Orchestrator) Status(ctx context.Context) (any, error) {
 	return d, nil
 }
 
-func (o *Orchestrator) Init() {
-	var wg sync.WaitGroup
-	wg.Add(3)
-	go func() {
-		o.Registry.Init()
-		wg.Done()
-	}()
-	go func() {
-		o.Sentinel.Init()
-		wg.Done()
-	}()
-	go func() {
-		o.Server.Init()
-		wg.Done()
-	}()
-	wg.Wait()
-	slog.Info("initialization completed!")
+// RefreshNodes re-pings every node now and returns the updated status.
+func (o *Orchestrator) RefreshNodes(ctx context.Context) (any, error) {
+	o.Registry.RefreshAll()
+
+	return o.Registry.Status(), nil
 }
 
 func (o *Orchestrator) ShutdownAll(ctx context.Context) {
@@ -147,22 +156,22 @@ func (o *Orchestrator) Shutdown(ctx context.Context, name string) (any, error) {
 
 // TODO: Check if we need to send only true/false or node info too!
 func (o *Orchestrator) Boot(ctx context.Context, name string) (any, error) {
-	n, ok := o.Registry.Nodes[name]
-	if !ok {
-		err := fmt.Errorf("boot requested on invalid node; node: %s; %w", name, apierr.ErrNotFound)
-		return Response{
-			false,
-			err.Error(),
-		}, err
-	}
-
-	// Unmanaged nodes are outside the sentinel's control, so an outage doesn't block them.
-	if !n.Unmanaged() && o.Sentinel.State != sentinel.Normal {
-		return Response{
-			false,
-			"sentinel currently offline; can't boot any machines.",
-		}, fmt.Errorf("sentinel currently offline; can't boot any machines; %w", apierr.ErrConflict)
-	}
+	// n, ok := o.Registry.Nodes[name]
+	// if !ok {
+	// 	err := fmt.Errorf("boot requested on invalid node; node: %s; %w", name, apierr.ErrNotFound)
+	// 	return Response{
+	// 		false,
+	// 		err.Error(),
+	// 	}, err
+	// }
+	//
+	// // Unmanaged nodes are outside the sentinel's control, so an outage doesn't block them.
+	// if !n.Unmanaged() && o.Sentinel.State != sentinel.Normal {
+	// 	return Response{
+	// 		false,
+	// 		"sentinel currently offline; can't boot any machines.",
+	// 	}, fmt.Errorf("sentinel currently offline; can't boot any machines; %w", apierr.ErrConflict)
+	// }
 
 	err := o.Registry.Boot(ctx, name)
 
@@ -175,24 +184,4 @@ func (o *Orchestrator) Boot(ctx context.Context, name string) (any, error) {
 		err == nil,
 		message,
 	}, err
-}
-
-func (o *Orchestrator) Start(ctx context.Context) {
-	slog.Info("orchestrator started!")
-	var wg sync.WaitGroup
-	wg.Add(3)
-	go func() {
-		o.Server.Run(ctx)
-		wg.Done()
-	}()
-	go func() {
-		o.Sentinel.Watch(ctx)
-		wg.Done()
-	}()
-	go func() {
-		o.Registry.Watch(ctx)
-		wg.Done()
-	}()
-
-	wg.Wait()
 }
