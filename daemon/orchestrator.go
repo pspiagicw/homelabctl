@@ -2,13 +2,16 @@ package daemon
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 
 	"github.com/pspiagicw/homelabctl/api"
+	"github.com/pspiagicw/homelabctl/apierr"
 	"github.com/pspiagicw/homelabctl/catalog"
 	"github.com/pspiagicw/homelabctl/config"
 	"github.com/pspiagicw/homelabctl/node"
+	"github.com/pspiagicw/homelabctl/profile"
 	"github.com/pspiagicw/homelabctl/sentinel"
 	"github.com/pspiagicw/homelabctl/web"
 )
@@ -18,6 +21,7 @@ type Orchestrator struct {
 	Sentinel *sentinel.Sentinel
 	Catalog  *catalog.Catalog
 	Server   *api.Server
+	Profiles *profile.ProfileManager
 }
 
 func NewOrchestrator(cfg *config.Config) *Orchestrator {
@@ -27,6 +31,7 @@ func NewOrchestrator(cfg *config.Config) *Orchestrator {
 	o.Catalog = catalog.NewCatalog(cfg)
 	o.Server = api.NewServer(cfg, o)
 	o.Server.UI = web.New(o).Handler()
+	o.Profiles = profile.NewProfileManager(cfg, o)
 
 	return o
 }
@@ -192,4 +197,38 @@ func (o *Orchestrator) Boot(ctx context.Context, name string) (any, error) {
 		err == nil,
 		message,
 	}, err
+}
+
+// ApplyProfile boots every node in the profile. The whole profile is refused
+// while the sentinel isn't Normal: booting onto battery power is never wanted.
+func (o *Orchestrator) ApplyProfile(ctx context.Context, name string) (any, error) {
+	if o.Sentinel.State != sentinel.Normal {
+		err := fmt.Errorf("sentinel not Normal; profile %s not applied; %w", name, apierr.ErrConflict)
+		return Response{false, err.Error()}, err
+	}
+
+	applied, err := o.Profiles.ApplyProfile(ctx, name, "manual")
+	if err != nil {
+		return Response{false, err.Error()}, err
+	}
+
+	return applied, nil
+}
+
+func (o *Orchestrator) GetProfile(ctx context.Context, name string) (any, error) {
+	p, err := o.Profiles.GetProfile(name)
+	if err != nil {
+		return Response{false, err.Error()}, err
+	}
+
+	return p, nil
+}
+
+func (o *Orchestrator) ListProfiles(ctx context.Context) (any, error) {
+	return o.Profiles.ListProfiles(), nil
+}
+
+// ProfileStatus is the typed profile overview for the web UI.
+func (o *Orchestrator) ProfileStatus() *profile.ProfileStatus {
+	return o.Profiles.ListProfiles()
 }

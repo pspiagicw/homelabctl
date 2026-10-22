@@ -33,6 +33,15 @@ func (f *fakeBackend) ListServices(_ context.Context) (any, error) {
 func (f *fakeBackend) RefreshNodes(_ context.Context) (any, error) {
 	return map[string]bool{"refreshed": true}, nil
 }
+func (f *fakeBackend) ListProfiles(_ context.Context) (any, error) {
+	return map[string]string{"profiles": "listed"}, nil
+}
+func (f *fakeBackend) GetProfile(_ context.Context, name string) (any, error) {
+	return map[string]string{"name": name}, nil
+}
+func (f *fakeBackend) ApplyProfile(_ context.Context, name string) (any, error) {
+	return map[string]string{"profile": name}, nil
+}
 
 // Mock backend that returns errors for testing error cases
 type errorBackend struct{}
@@ -53,6 +62,15 @@ func (e *errorBackend) ListServices(_ context.Context) (any, error) {
 }
 func (e *errorBackend) RefreshNodes(_ context.Context) (any, error) {
 	return nil, apierr.ErrUpstream
+}
+func (e *errorBackend) ListProfiles(_ context.Context) (any, error) {
+	return nil, apierr.ErrUpstream
+}
+func (e *errorBackend) GetProfile(_ context.Context, _ string) (any, error) {
+	return nil, apierr.ErrNotFound
+}
+func (e *errorBackend) ApplyProfile(_ context.Context, _ string) (any, error) {
+	return nil, apierr.ErrConflict
 }
 
 func TestHealthEndpoint(t *testing.T) {
@@ -345,6 +363,99 @@ func TestRefreshNodesEndpointWithError(t *testing.T) {
 
 	// Check that we get an upstream error status (502)
 	assert.Equal(t, http.StatusBadGateway, rec.Code)
+}
+
+func TestListProfilesEndpoint(t *testing.T) {
+	// Create a simple config (we don't need real values for this test)
+	cfg := &config.Config{}
+
+	server := NewServer(cfg, &fakeBackend{})
+	server.Init()
+
+	req := httptest.NewRequest("GET", "/profiles", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"profiles":"listed"`)
+}
+
+func TestListProfilesEndpointWithError(t *testing.T) {
+	// Create a simple config (we don't need real values for this test)
+	cfg := &config.Config{}
+
+	server := NewServer(cfg, &errorBackend{})
+	server.Init()
+
+	req := httptest.NewRequest("GET", "/profiles", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadGateway, rec.Code)
+}
+
+func TestGetProfileEndpoint(t *testing.T) {
+	// Create a simple config (we don't need real values for this test)
+	cfg := &config.Config{}
+
+	server := NewServer(cfg, &fakeBackend{})
+	server.Init()
+
+	req := httptest.NewRequest("GET", "/profiles/movie", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"name":"movie"`)
+}
+
+func TestGetProfileEndpointWithError(t *testing.T) {
+	// Create a simple config (we don't need real values for this test)
+	cfg := &config.Config{}
+
+	server := NewServer(cfg, &errorBackend{})
+	server.Init()
+
+	req := httptest.NewRequest("GET", "/profiles/nosuch", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestApplyProfileEndpoint(t *testing.T) {
+	// Create a simple config (we don't need real values for this test)
+	cfg := &config.Config{}
+
+	server := NewServer(cfg, &fakeBackend{})
+	server.Init()
+
+	req := httptest.NewRequest("POST", "/profiles/movie/apply", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"profile":"movie"`)
+}
+
+func TestApplyProfileEndpointWithError(t *testing.T) {
+	// Create a simple config (we don't need real values for this test)
+	cfg := &config.Config{}
+
+	server := NewServer(cfg, &errorBackend{})
+	server.Init()
+
+	req := httptest.NewRequest("POST", "/profiles/movie/apply", nil)
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusConflict, rec.Code)
 }
 
 func TestRouteNotFound(t *testing.T) {

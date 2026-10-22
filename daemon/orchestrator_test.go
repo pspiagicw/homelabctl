@@ -10,6 +10,7 @@ import (
 	"github.com/pspiagicw/homelabctl/backend"
 	"github.com/pspiagicw/homelabctl/config"
 	"github.com/pspiagicw/homelabctl/node"
+	"github.com/pspiagicw/homelabctl/profile"
 	"github.com/pspiagicw/homelabctl/sentinel"
 )
 
@@ -53,6 +54,27 @@ func TestBootManagedDuringOutageBlocked(t *testing.T) {
 	}
 	if got := o.Registry.Nodes["desktop"].State; got != node.OFF {
 		t.Errorf("node.State = %s, want %s", got, node.OFF)
+	}
+}
+
+// TestApplyProfileDuringOutageRefused verifies a profile boots nothing while
+// the sentinel isn't Normal.
+func TestApplyProfileDuringOutageRefused(t *testing.T) {
+	o := setupOutage(false)
+	o.Profiles = profile.NewProfileManager(&config.Config{Profiles: map[string]config.ProfileConfig{
+		"desk": {Nodes: []string{"desktop"}},
+	}}, o)
+
+	_, err := o.ApplyProfile(context.Background(), "desk")
+
+	if !errors.Is(err, apierr.ErrConflict) {
+		t.Errorf("ApplyProfile() error = %v, want ErrConflict", err)
+	}
+	if got := o.Registry.Nodes["desktop"].State; got != node.OFF {
+		t.Errorf("node.State = %s, want %s", got, node.OFF)
+	}
+	if o.Profiles.ListProfiles().LastApplied != nil {
+		t.Errorf("LastApplied recorded for a refused apply")
 	}
 }
 

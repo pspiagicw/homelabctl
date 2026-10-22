@@ -55,6 +55,12 @@ func (s *Server) Init() {
 
 	s.router.Get("/services", s.handleService)
 
+	s.router.Route("/profiles", func(r chi.Router) {
+		r.Get("/", s.handleListProfiles)
+		r.Get("/{name}", s.handleGetProfile)
+		r.Post("/{name}/apply", s.handleApplyProfile)
+	})
+
 	if s.UI != nil {
 		s.router.Mount("/ui", s.UI)
 		s.router.Get("/", func(w http.ResponseWriter, r *http.Request) {
@@ -137,6 +143,21 @@ func (s *Server) handleService(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleRefreshNodes(w http.ResponseWriter, r *http.Request) {
 	response, err := s.backend.RefreshNodes(r.Context())
+	s.WriteResponse(response, err, w)
+}
+
+func (s *Server) handleListProfiles(w http.ResponseWriter, r *http.Request) {
+	response, err := s.backend.ListProfiles(r.Context())
+	s.WriteResponse(response, err, w)
+}
+
+func (s *Server) handleGetProfile(w http.ResponseWriter, r *http.Request) {
+	response, err := s.backend.GetProfile(r.Context(), chi.URLParam(r, "name"))
+	s.WriteResponse(response, err, w)
+}
+
+func (s *Server) handleApplyProfile(w http.ResponseWriter, r *http.Request) {
+	response, err := s.backend.ApplyProfile(r.Context(), chi.URLParam(r, "name"))
 	s.WriteResponse(response, err, w)
 }
 
