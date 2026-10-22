@@ -69,3 +69,17 @@ func TestListIsSafeDuringRefresh(t *testing.T) {
 	}
 	<-done
 }
+
+func TestRefreshRecordsCheckTime(t *testing.T) {
+	c, _ := setupCatalog(false)
+
+	if !c.List().Services[0].LastChecked.IsZero() {
+		t.Fatalf("LastChecked set before any check")
+	}
+	c.Refresh()
+
+	s := c.List().Services[0]
+	if s.LastChecked.IsZero() {
+		t.Errorf("LastChecked not set after a check")
+	}
+}

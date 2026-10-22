@@ -498,6 +498,31 @@ main { min-width: 0; }
 }
 .service-meta code { overflow-wrap: anywhere; }
 
+/* Health indicator: a dot plus a short label. Hollow dots mean "no verdict"
+   (asleep: its node is off on purpose; unchecked: no result yet). */
+.health {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	font-weight: 600;
+	cursor: help;
+}
+.health::before {
+	content: "";
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	box-sizing: border-box;
+}
+.health-up { color: var(--ok-fg); }
+.health-up::before { background: var(--ok-fg); }
+.health-down { color: var(--error-fg); }
+.health-down::before { background: var(--error-fg); }
+.health-asleep { color: var(--muted); font-weight: 400; }
+.health-asleep::before { border: 2px solid var(--muted); }
+.health-unchecked { color: var(--muted); font-weight: 400; }
+.health-unchecked::before { border: 1.5px dashed var(--muted); }
+
 .service-node {
 	padding: 0 6px;
 	border-radius: 3px;

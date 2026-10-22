@@ -117,6 +117,7 @@
 					<span class="service-name">{{.Name}}</span>
 					{{with .Description}}<span class="service-desc">{{.}}</span>{{end}}
 					<span class="service-meta">
+						<span class="health health-{{.Health}}" title="{{.HealthTitle}}">{{.Health}}</span>
 						<code>{{.Host}}</code>
 						{{with .Node}}<span class="service-node node-{{$state}}">{{.}} · {{$state}}</span>{{end}}
 					</span>

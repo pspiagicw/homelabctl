@@ -52,8 +52,39 @@ type nodeRow struct {
 // serviceTile is a service plus what the dashboard shows about it.
 type serviceTile struct {
 	catalog.Status
-	Host      string // host[:port] from URL, shown under the description
-	NodeState string // power state of Node; empty when Node is unset
+	Host        string // host[:port] from URL, shown under the description
+	NodeState   string // power state of Node; empty when Node is unset
+	Health      string // up, down, asleep or unchecked
+	HealthTitle string // hover text: when it was last checked
+}
+
+// health classifies a service from its last check and its node's power state.
+// A service that doesn't answer while its node is off is asleep, not down.
+func health(s catalog.Status, nodeState string) string {
+	switch {
+	case s.LastChecked.IsZero():
+		return "unchecked"
+	case s.LastPing:
+		return "up"
+	case s.Node != "" && nodeState != node.ON:
+		return "asleep"
+	default:
+		return "down"
+	}
+}
+
+// healthTitle is the hover text for a service's health indicator.
+func healthTitle(s catalog.Status, h string) string {
+	switch h {
+	case "unchecked":
+		return "not checked yet"
+	case "asleep":
+		return fmt.Sprintf("not answering: %s is off · checked %s", s.Node, s.LastChecked.Format("15:04:05"))
+	case "down":
+		return fmt.Sprintf("not answering · checked %s", s.LastChecked.Format("15:04:05"))
+	default:
+		return fmt.Sprintf("%s · checked %s", h, s.LastChecked.Format("15:04:05"))
+	}
 }
 
 type serviceGroup struct {
@@ -144,6 +175,8 @@ func groupServices(services []catalog.Status, states map[string]string) []servic
 
 	for _, s := range services {
 		tile := serviceTile{Status: s, Host: s.URL, NodeState: states[s.Node]}
+		tile.Health = health(s, tile.NodeState)
+		tile.HealthTitle = healthTitle(s, tile.Health)
 		if parsed, err := url.Parse(s.URL); err == nil && parsed.Host != "" {
 			tile.Host = parsed.Host
 		}

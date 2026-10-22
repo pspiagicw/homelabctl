@@ -18,16 +18,16 @@ import (
 type Status struct {
 	config.ServiceConfig
 
-	LastPing bool      `json:"last_ping"`
-	LastSeen time.Time `json:"last_seen"`
+	LastPing    bool      `json:"last_ping"`
+	LastSeen    time.Time `json:"last_seen"`    // last time it answered
+	LastChecked time.Time `json:"last_checked"` // zero until the first check finishes
 }
 
 // CatalogService is one service being checked. Its status is only touched
 // under mu, because the watcher writes it while the API and UI read it.
 type CatalogService struct {
-	mu      sync.Mutex
-	status  Status
-	checked bool // whether a check has completed yet
+	mu     sync.Mutex
+	status Status
 
 	CheckFunc agents.Pinger
 }
@@ -36,14 +36,15 @@ type CatalogService struct {
 // check timeout), then records the result.
 func (s *CatalogService) refresh() {
 	up := s.CheckFunc(s.status.URL)
+	now := time.Now()
 
 	s.mu.Lock()
-	first := !s.checked
+	first := s.status.LastChecked.IsZero()
 	changed := s.status.LastPing != up
-	s.checked = true
 	s.status.LastPing = up
+	s.status.LastChecked = now
 	if up {
-		s.status.LastSeen = time.Now()
+		s.status.LastSeen = now
 	}
 	s.mu.Unlock()
 

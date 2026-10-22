@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/pspiagicw/homelabctl/apierr"
 	"github.com/pspiagicw/homelabctl/catalog"
@@ -237,4 +238,41 @@ func TestHeaderShowsVersion(t *testing.T) {
 	body := serve(h, http.MethodGet, "/").Body.String()
 
 	assert.Contains(t, body, `class="version" title="`+version.String()+`">`+version.Version+`</span>`)
+}
+
+func TestHealth(t *testing.T) {
+	checked := time.Now()
+	tests := []struct {
+		name      string
+		status    catalog.Status
+		nodeState string
+		want      string
+	}{
+		{"never checked", catalog.Status{}, "", "unchecked"},
+		{"answering", catalog.Status{LastPing: true, LastChecked: checked}, "", "up"},
+		{"down, no node set", catalog.Status{LastChecked: checked}, "", "down"},
+		{"down, node on", catalog.Status{ServiceConfig: config.ServiceConfig{Node: "falcon2"}, LastChecked: checked}, node.ON, "down"},
+		{"down, node off", catalog.Status{ServiceConfig: config.ServiceConfig{Node: "falcon2"}, LastChecked: checked}, node.OFF, "asleep"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, health(tt.status, tt.nodeState))
+		})
+	}
+}
+
+func TestServiceTileShowsHealth(t *testing.T) {
+	b, _ := setupUI(node.ON)
+	b.services = []catalog.Status{{
+		ServiceConfig: config.ServiceConfig{Name: "Jellyfin", URL: "http://192.168.10.91:8096"},
+		LastPing:      true,
+		LastChecked:   time.Now(),
+	}}
+	h := New(b).Handler()
+
+	body := serve(h, http.MethodGet, "/nodes").Body.String()
+
+	assert.Contains(t, body, `class="health health-up"`)
+	assert.Contains(t, body, "up · checked")
 }
