@@ -64,17 +64,17 @@ These 2 functions are part of command parsing, not loading. Loading should only 
 - [ ] Env var override support (e.g. `HOMELABCTL_CONFIG`)
 
 ### 1.3 Validation (`internal/config/validate.go`)
-- [ ] `func (c *Config) Validate() error` orchestrator, returns aggregated `error` (use `errors.Join` or a custom `ValidationErrors []error`)
-- [ ] Validate sentinel host is **not** present in `nodes:` (enforce separation)
-- [ ] Validate every node has a valid MAC address format (regex or `net.ParseMAC`)
-- [ ] Validate every node has a valid IP/hostname in `address`
-- [ ] Validate every profile's `nodes:` entries reference a key that exists in `nodes:`
-- [ ] Validate no duplicate node names within a single profile's list
-- [ ] Validate schedule entries: valid time format, no duplicate times, profile reference exists
-- [ ] Validate `overrides.default_duration` parses to a positive duration
-- [ ] Validate SSH: identity file path exists and is readable (warn, not fail, if missing — daemon may run before keys are provisioned)
-- [ ] Validate at most one node has `always_on: true` per physical daemon host (sanity check, not a hard rule — decide during review)
-- [ ] Validate that `unmanaged: true` nodes do not appear in any profile's `nodes:` list
+- [x] `func (c *Config) Validate() error` orchestrator, returns aggregated `error` (use `errors.Join` or a custom `ValidationErrors []error`) — config.Validate, errors.Join; also checks ssh, sentinel intervals, node waits, services
+- [x] Validate sentinel host is **not** present in `nodes:` (enforce separation) — also rejects a node sharing the sentinel's address
+- [x] Validate every node has a valid MAC address format (regex or `net.ParseMAC`)
+- [x] Validate every node has a valid IP/hostname in `address`
+- [x] Validate every profile's `nodes:` entries reference a key that exists in `nodes:`
+- [x] Validate no duplicate node names within a single profile's list
+- [x] Validate schedule entries: valid time format, no duplicate times, profile reference exists
+- [~] Validate `overrides.default_duration` parses to a positive duration — n/a: no overrides section yet
+- [x] Validate SSH: identity file path exists and is readable (warn, not fail, if missing — daemon may run before keys are provisioned) — slog.Warn
+- [~] Validate at most one node has `always_on: true` per physical daemon host (sanity check, not a hard rule — decide during review) — n/a: no always_on field
+- [x] Validate that `unmanaged: true` nodes do not appear in any profile's `nodes:` list
 
 ### 1.4 Defaults (`internal/config/defaults.go`)
 - [ ] Define default SSH port (22), connect timeout (10s), check_interval (30s) applied when omitted
@@ -161,7 +161,7 @@ These 2 functions are part of command parsing, not loading. Loading should only 
 
 ### 4.1 Profile resolution (`internal/scheduler/profile.go`)
 - [ ] `func (s *Scheduler) CurrentProfile(now time.Time) (string, error)` — walks `schedule.entries`, finds the latest entry whose time is ≤ now (with wraparound for entries before midnight vs after)
-- [ ] `func (s *Scheduler) NextTransition(now time.Time) (time.Time, string, error)` — for daemon's sleep-until-next-tick loop
+- [x] `func (s *Scheduler) NextTransition(now time.Time) (time.Time, string, error)` — for daemon's sleep-until-next-tick loop — schedule.Scheduler.nextAfter
 
 ### 4.2 Scheduler runtime (`internal/scheduler/scheduler.go`)
 - [ ] `type Scheduler struct` — holds `config.ScheduleConfig`, `config.Profiles`, reference to `node.Registry`
@@ -169,7 +169,7 @@ These 2 functions are part of command parsing, not loading. Loading should only 
 - [ ] Boot new nodes in **list order** (respecting `wait_after_boot`/Prober between each, or parallel-with-stagger — decide and document)
 - [ ] Shut down nodes no longer in profile, in **reverse list order** of the *previous* profile
 - [ ] Ignore nodes with `unmanaged: true`: never booted or shut down by profile changes (manual control only)
-- [ ] `func (s *Scheduler) Run(ctx context.Context) error` — main loop: sleep until `NextTransition`, call `ApplyProfile`, repeat; select on ctx.Done() and an interrupt channel (for override/sentinel preemption)
+- [x] `func (s *Scheduler) Run(ctx context.Context) error` — main loop: sleep until `NextTransition`, call `ApplyProfile`, repeat; select on ctx.Done() and an interrupt channel (for override/sentinel preemption) — schedule.Scheduler.Watch; applies boot-only profiles at entry times, no interrupt channel yet
 
 ### 4.3 Interruption handling (`internal/scheduler/interrupt.go`)
 - [ ] Channel-based signal so `override` and `sentinel` packages can pause/resume the scheduler loop without racing the ticker

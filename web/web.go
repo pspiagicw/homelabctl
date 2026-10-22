@@ -19,6 +19,7 @@ import (
 	"github.com/pspiagicw/homelabctl/logging"
 	"github.com/pspiagicw/homelabctl/node"
 	"github.com/pspiagicw/homelabctl/profile"
+	"github.com/pspiagicw/homelabctl/schedule"
 	"github.com/pspiagicw/homelabctl/sentinel"
 	"github.com/pspiagicw/homelabctl/utils"
 	"github.com/pspiagicw/homelabctl/version"
@@ -35,6 +36,8 @@ type Backend interface {
 	Services() *catalog.List
 	ProfileStatus() *profile.ProfileStatus
 	ApplyProfile(ctx context.Context, name string) (any, error)
+	ScheduleStatus() *schedule.Status
+	ShutdownAllResults(ctx context.Context) []profile.NodeResult
 	RefreshNodes(ctx context.Context) (any, error)
 	Boot(ctx context.Context, name string) (any, error)
 	Shutdown(ctx context.Context, name string) (any, error)
@@ -102,6 +105,7 @@ type view struct {
 	Nodes    []nodeRow
 	Services []serviceGroup
 	Profiles *profile.ProfileStatus
+	Schedule *schedule.Status
 	Message  string
 	Failed   bool
 }
@@ -147,6 +151,7 @@ func (u *UI) Handler() http.Handler {
 	r.Post("/nodes/{name}/shutdown", u.handleAction("shutdown", u.backend.Shutdown))
 	r.Post("/nodes/refresh", u.handleRefresh)
 	r.Post("/profiles/{name}/apply", u.handleApplyProfile)
+	r.Post("/nodes/shutdown-all", u.handleShutdownAll)
 	r.Get("/static/*", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFileFS(w, r, u.static, chi.URLParam(r, "*"))
 	})
@@ -171,6 +176,7 @@ func (u *UI) view() view {
 		states[n.Name] = n.PowerState
 	}
 	v.Profiles = u.backend.ProfileStatus()
+	v.Schedule = u.backend.ScheduleStatus()
 	v.Services = groupServices(u.backend.Services().Services, states)
 
 	return v
@@ -235,15 +241,34 @@ func appliedMessage(a *profile.Applied) (string, bool) {
 	if len(a.Nodes) == 0 {
 		return fmt.Sprintf("applied %s: nothing to boot", a.Profile), false
 	}
+	return resultsMessage("applied "+a.Profile, a.Nodes)
+}
+
+func (u *UI) handleShutdownAll(w http.ResponseWriter, r *http.Request) {
+	u.Log.Info("ui shutdown-all requested")
+
+	results := u.backend.ShutdownAllResults(r.Context())
+
+	v := u.view()
+	v.Message, v.Failed = resultsMessage("shut down all", results)
+	u.render(w, http.StatusOK, "panel", v)
+}
+
+// resultsMessage summarises per-node results, e.g. "shut down all: shutting
+// falcon-heavy, skipped falcon1". It counts as failed when any node failed.
+func resultsMessage(action string, results []profile.NodeResult) (string, bool) {
+	if len(results) == 0 {
+		return action + ": no managed nodes", false
+	}
 
 	failed := false
-	parts := make([]string, 0, len(a.Nodes))
-	for _, n := range a.Nodes {
+	parts := make([]string, 0, len(results))
+	for _, n := range results {
 		parts = append(parts, n.Result+" "+n.Node)
 		failed = failed || n.Result == profile.Failed
 	}
 
-	return fmt.Sprintf("applied %s: %s", a.Profile, strings.Join(parts, ", ")), failed
+	return fmt.Sprintf("%s: %s", action, strings.Join(parts, ", ")), failed
 }
 
 func (u *UI) handleRefresh(w http.ResponseWriter, r *http.Request) {

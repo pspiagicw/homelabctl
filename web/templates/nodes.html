@@ -40,6 +40,11 @@
 		hx-post="/ui/nodes/refresh" hx-target="#panel" hx-disabled-elt="this">
 		<span class="when-idle">refresh</span><span class="when-busy">refreshing…</span>
 	</button>
+	<button class="btn-text btn-shutdown-all" type="button" title="Shut down every managed node (unmanaged nodes are left alone)"
+		hx-post="/ui/nodes/shutdown-all" hx-target="#panel" hx-disabled-elt="this"
+		hx-confirm="Shut down every managed node?">
+		<span class="when-idle">shut down all</span><span class="when-busy">shutting down…</span>
+	</button>
 </section>
 
 {{with .Profiles}}{{if .Profiles}}
@@ -71,6 +76,31 @@
 		{{range .Nodes}}<span class="result result-{{.Result}}"{{with .Message}} title="{{.}}"{{end}}>{{.Node}} {{.Result}}</span>{{end}}
 	</p>
 	{{end}}
+
+	{{with .AutoOff}}
+	<p class="profile-last profile-autooff">
+		<span class="label">auto-off</span>
+		<span>{{template "time" .At}}</span>
+		<span>shuts down {{join .Nodes}}</span>
+	</p>
+	{{end}}
+
+	{{with .LastAutoOff}}
+	<p class="profile-last">
+		<span class="label">last auto-off</span>
+		<span>{{template "time" .RanAt}}</span>
+		{{range .Nodes}}<span class="result result-{{.Result}}"{{with .Message}} title="{{.}}"{{end}}>{{.Node}} {{.Result}}</span>{{end}}
+	</p>
+	{{end}}
+
+	{{with $.Schedule}}{{if .Entries}}
+	<p class="profile-last">
+		<span class="label">schedule</span>
+		{{with .Next}}<span>next <b>{{.Profile}}</b> at {{.Time}}</span>{{end}}
+		{{if not .NextAt.IsZero}}<span>{{template "time" .NextAt}}</span>{{end}}
+		{{with .LastRun}}<span class="result{{if .Error}} result-failed{{end}}"{{with .Error}} title="{{.}}"{{end}}>last: {{.Entry.Profile}} at {{.Entry.Time}}{{if .Error}} refused{{end}}</span>{{end}}
+	</p>
+	{{end}}{{end}}
 </section>
 {{end}}{{end}}
 

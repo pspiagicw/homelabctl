@@ -5,14 +5,16 @@
 	var MAX_EVENTS = 200;
 	var events = [];
 
+	// "2m ago" for past times, "in 47m" for future ones (auto-off, schedule).
 	function ago(ms) {
-		var s = Math.max(0, Math.round(ms / 1000));
-		if (s < 60) return s + "s ago";
-		var m = Math.floor(s / 60);
-		if (m < 60) return m + "m ago";
-		var h = Math.floor(m / 60);
-		if (h < 24) return h + "h " + (m % 60) + "m ago";
-		return Math.floor(h / 24) + "d " + (h % 24) + "h ago";
+		var future = ms < 0;
+		var s = Math.round(Math.abs(ms) / 1000);
+		var text;
+		if (s < 60) text = s + "s";
+		else if (s < 3600) text = Math.floor(s / 60) + "m";
+		else if (s < 86400) text = Math.floor(s / 3600) + "h " + Math.floor((s % 3600) / 60) + "m";
+		else text = Math.floor(s / 86400) + "d " + Math.floor((s % 86400) / 3600) + "h";
+		return future ? "in " + text : text + " ago";
 	}
 
 	// "2:33pm", with the date in front when it isn't today.

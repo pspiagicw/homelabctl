@@ -271,6 +271,16 @@ main { min-width: 0; }
 }
 .result-booting { background: var(--ok-bg); color: var(--ok-fg); }
 .result-failed { background: var(--error-bg); color: var(--error-fg); }
+.result-shutting { background: var(--warn-bg); color: var(--warn-fg); }
+.profile-autooff { color: var(--warn-fg); }
+
+/* Shut down all: an outlined button in the danger colour. */
+.btn-shutdown-all { padding: 4px 10px; color: var(--shutdown); border-color: var(--shutdown); }
+.btn-shutdown-all:hover { background: var(--error-bg); color: var(--error-fg); }
+.btn-shutdown-all .when-busy { display: none; }
+.btn-shutdown-all.htmx-request { cursor: progress; opacity: 0.6; }
+.btn-shutdown-all.htmx-request .when-idle { display: none; }
+.btn-shutdown-all.htmx-request .when-busy { display: inline; }
 .btn-refresh .when-busy { display: none; }
 .btn-refresh.htmx-request { cursor: progress; }
 .btn-refresh.htmx-request .when-idle { display: none; }

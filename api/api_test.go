@@ -42,6 +42,12 @@ func (f *fakeBackend) GetProfile(_ context.Context, name string) (any, error) {
 func (f *fakeBackend) ApplyProfile(_ context.Context, name string) (any, error) {
 	return map[string]string{"profile": name}, nil
 }
+func (f *fakeBackend) GetSchedule(_ context.Context) (any, error) {
+	return map[string]string{"next": "movie"}, nil
+}
+func (f *fakeBackend) ShutdownAllNodes(_ context.Context) (any, error) {
+	return []map[string]string{{"node": "falcon2", "result": "shutting"}}, nil
+}
 
 // Mock backend that returns errors for testing error cases
 type errorBackend struct{}
@@ -71,6 +77,12 @@ func (e *errorBackend) GetProfile(_ context.Context, _ string) (any, error) {
 }
 func (e *errorBackend) ApplyProfile(_ context.Context, _ string) (any, error) {
 	return nil, apierr.ErrConflict
+}
+func (e *errorBackend) GetSchedule(_ context.Context) (any, error) {
+	return nil, apierr.ErrUpstream
+}
+func (e *errorBackend) ShutdownAllNodes(_ context.Context) (any, error) {
+	return nil, apierr.ErrUpstream
 }
 
 func TestHealthEndpoint(t *testing.T) {
@@ -456,6 +468,38 @@ func TestApplyProfileEndpointWithError(t *testing.T) {
 	server.Handler().ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusConflict, rec.Code)
+}
+
+func TestScheduleEndpoint(t *testing.T) {
+	server := NewServer(&config.Config{}, &fakeBackend{})
+	server.Init()
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/schedule", nil))
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"next":"movie"`)
+}
+
+func TestShutdownAllEndpoint(t *testing.T) {
+	server := NewServer(&config.Config{}, &fakeBackend{})
+	server.Init()
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, httptest.NewRequest("POST", "/nodes/shutdown-all", nil))
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"result":"shutting"`)
+}
+
+func TestShutdownAllEndpointWithError(t *testing.T) {
+	server := NewServer(&config.Config{}, &errorBackend{})
+	server.Init()
+	rec := httptest.NewRecorder()
+
+	server.Handler().ServeHTTP(rec, httptest.NewRequest("POST", "/nodes/shutdown-all", nil))
+
+	assert.Equal(t, http.StatusBadGateway, rec.Code)
 }
 
 func TestRouteNotFound(t *testing.T) {

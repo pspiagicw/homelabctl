@@ -51,9 +51,11 @@ func (s *Server) Init() {
 		r.Post("/{name}/boot", s.handleBoot)
 		r.Post("/{name}/shutdown", s.handleShutdown)
 		r.Post("/refresh", s.handleRefreshNodes)
+		r.Post("/shutdown-all", s.handleShutdownAll)
 	})
 
 	s.router.Get("/services", s.handleService)
+	s.router.Get("/schedule", s.handleSchedule)
 
 	s.router.Route("/profiles", func(r chi.Router) {
 		r.Get("/", s.handleListProfiles)
@@ -158,6 +160,16 @@ func (s *Server) handleGetProfile(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleApplyProfile(w http.ResponseWriter, r *http.Request) {
 	response, err := s.backend.ApplyProfile(r.Context(), chi.URLParam(r, "name"))
+	s.WriteResponse(response, err, w)
+}
+
+func (s *Server) handleSchedule(w http.ResponseWriter, r *http.Request) {
+	response, err := s.backend.GetSchedule(r.Context())
+	s.WriteResponse(response, err, w)
+}
+
+func (s *Server) handleShutdownAll(w http.ResponseWriter, r *http.Request) {
+	response, err := s.backend.ShutdownAllNodes(r.Context())
 	s.WriteResponse(response, err, w)
 }
 

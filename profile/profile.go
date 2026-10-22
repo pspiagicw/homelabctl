@@ -17,10 +17,15 @@ import (
 
 // Per-node outcomes of applying a profile.
 const (
-	Booting = "booting" // Wake-on-LAN sent
-	Skipped = "skipped" // nothing to do, e.g. already on or mid-transition
-	Failed  = "failed"  // boot attempted and failed
+	Booting      = "booting"  // Wake-on-LAN sent
+	ShuttingDown = "shutting" // shutdown sent (auto-off)
+	Skipped      = "skipped"  // nothing to do, e.g. already on or mid-transition
+	Failed       = "failed"   // attempted and failed
 )
+
+// Manual is the trigger for applies from the UI or API. Only manual applies
+// schedule an auto-off.
+const Manual = "manual"
 
 type Profile struct {
 	Name  string   `json:"name"`
@@ -44,6 +49,9 @@ type Applied struct {
 type ProfileStatus struct {
 	Profiles    []Profile `json:"profiles"`     // sorted by name
 	LastApplied *Applied  `json:"last_applied"` // nil until the first apply
+
+	AutoOff     *AutoOff    `json:"auto_off"`      // pending shutdown, nil if none
+	LastAutoOff *AutoOffRun `json:"last_auto_off"` // nil until an auto-off ran
 }
 
 type ProfileManager struct {
@@ -54,6 +62,12 @@ type ProfileManager struct {
 
 	profiles map[string]Profile
 	last     *Applied
+
+	// Auto-off for manual applies; guarded by mu.
+	autoOff     *AutoOff
+	lastAutoOff *AutoOffRun
+	timer       *time.Timer
+	autoOffGen  int
 
 	b backend.API
 }
@@ -94,6 +108,16 @@ func (p *ProfileManager) ListProfiles() *ProfileStatus {
 		last.Nodes = append([]NodeResult(nil), p.last.Nodes...)
 		status.LastApplied = &last
 	}
+	if p.autoOff != nil {
+		pending := *p.autoOff
+		pending.Nodes = append([]string(nil), p.autoOff.Nodes...)
+		status.AutoOff = &pending
+	}
+	if p.lastAutoOff != nil {
+		run := *p.lastAutoOff
+		run.Nodes = append([]NodeResult(nil), p.lastAutoOff.Nodes...)
+		status.LastAutoOff = &run
+	}
 
 	return status
 }
@@ -132,6 +156,9 @@ func (p *ProfileManager) ApplyProfile(ctx context.Context, name, trigger string)
 
 	p.mu.Lock()
 	p.last = applied
+	if trigger == Manual {
+		p.scheduleAutoOff(booted(applied))
+	}
 	p.mu.Unlock()
 
 	return applied, nil
@@ -152,6 +179,27 @@ func result(node string, err error) NodeResult {
 
 // copyProfile returns a profile with its own node slice, never nil, so an
 // empty profile encodes as "nodes": [] rather than null.
+// booted lists the nodes an apply actually woke up.
+func booted(a *Applied) []string {
+	nodes := []string{}
+	for _, n := range a.Nodes {
+		if n.Result == Booting {
+			nodes = append(nodes, n.Node)
+		}
+	}
+	return nodes
+}
+
+// ShutdownResult classifies a shutdown attempt; a conflict means the node was
+// already off (or mid-transition).
+func ShutdownResult(node string, err error) NodeResult {
+	r := result(node, err)
+	if r.Result == Booting {
+		r.Result = ShuttingDown
+	}
+	return r
+}
+
 func copyProfile(profile Profile) Profile {
 	nodes := make([]string, len(profile.Nodes))
 	copy(nodes, profile.Nodes)

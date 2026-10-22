@@ -14,6 +14,7 @@ import (
 	"github.com/pspiagicw/homelabctl/config"
 	"github.com/pspiagicw/homelabctl/node"
 	"github.com/pspiagicw/homelabctl/profile"
+	"github.com/pspiagicw/homelabctl/schedule"
 	"github.com/pspiagicw/homelabctl/sentinel"
 	"github.com/pspiagicw/homelabctl/version"
 	"github.com/stretchr/testify/assert"
@@ -30,6 +31,19 @@ type fakeBackend struct {
 	profiles  profile.ProfileStatus
 	applied   string // profile passed to ApplyProfile
 	applyErr  error
+	schedule  schedule.Status
+	shutdown  []profile.NodeResult // returned by ShutdownAllResults
+	shutAll   int                  // ShutdownAllResults calls
+}
+
+func (f *fakeBackend) ScheduleStatus() *schedule.Status {
+	status := f.schedule
+	return &status
+}
+
+func (f *fakeBackend) ShutdownAllResults(_ context.Context) []profile.NodeResult {
+	f.shutAll++
+	return f.shutdown
 }
 
 // ProfileStatus returns a copy so a test's later changes don't leak in.
@@ -371,4 +385,61 @@ func TestApplyProfileActionRefused(t *testing.T) {
 	assert.Equal(t, http.StatusConflict, rec.Code)
 	assert.Contains(t, rec.Body.String(), "sentinel not Normal")
 	assert.Contains(t, rec.Body.String(), "snack-error")
+}
+
+func TestShutdownAllButtonRenders(t *testing.T) {
+	_, h := setupUI(node.ON)
+
+	body := serve(h, http.MethodGet, "/nodes").Body.String()
+
+	assert.Contains(t, body, `hx-post="/ui/nodes/shutdown-all"`)
+	assert.Contains(t, body, `hx-confirm="Shut down every managed node?"`)
+}
+
+func TestShutdownAllAction(t *testing.T) {
+	b, _ := setupUI(node.ON)
+	b.shutdown = []profile.NodeResult{
+		{Node: "falcon-heavy", Result: profile.ShuttingDown},
+		{Node: "falcon1", Result: profile.Skipped, Message: "node offline"},
+	}
+
+	rec := serve(New(b).Handler(), http.MethodPost, "/nodes/shutdown-all")
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, 1, b.shutAll)
+	assert.Contains(t, rec.Body.String(), "shut down all: shutting falcon-heavy, skipped falcon1")
+	assert.NotContains(t, rec.Body.String(), "snack-error")
+}
+
+func TestShutdownAllActionFailureMarked(t *testing.T) {
+	b, _ := setupUI(node.ON)
+	b.shutdown = []profile.NodeResult{{Node: "falcon-heavy", Result: profile.Failed, Message: "ssh: no key"}}
+
+	rec := serve(New(b).Handler(), http.MethodPost, "/nodes/shutdown-all")
+
+	assert.Contains(t, rec.Body.String(), "snack-error")
+}
+
+func TestAutoOffShownOnProfilesCard(t *testing.T) {
+	b := setupProfilesUI(node.ON)
+	b.profiles.AutoOff = &profile.AutoOff{At: time.Now().Add(time.Hour), Nodes: []string{"falcon-heavy", "falcon2"}}
+
+	body := serve(New(b).Handler(), http.MethodGet, "/nodes").Body.String()
+
+	assert.Contains(t, body, "shuts down falcon-heavy, falcon2")
+}
+
+func TestScheduleShownOnProfilesCard(t *testing.T) {
+	b := setupProfilesUI(node.ON)
+	b.schedule = schedule.Status{
+		Entries: []schedule.Entry{{Time: "12:30", Profile: "movie"}},
+		Next:    &schedule.Entry{Time: "12:30", Profile: "movie"},
+		NextAt:  time.Now().Add(2 * time.Hour),
+		LastRun: &schedule.Run{Entry: schedule.Entry{Time: "09:00", Profile: "backup"}, Error: "sentinel not Normal"},
+	}
+
+	body := serve(New(b).Handler(), http.MethodGet, "/nodes").Body.String()
+
+	assert.Contains(t, body, "next <b>movie</b> at 12:30")
+	assert.Contains(t, body, "last: backup at 09:00 refused")
 }

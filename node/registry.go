@@ -103,16 +103,20 @@ func (r *Registry) NodeStatus(ctx context.Context, name string) (*DetailedStatus
 	return node.GetDetailedStatus(), nil
 }
 
-func (r *Registry) ShutdownAll(ctx context.Context) {
+// ShutdownAll shuts down every managed node (unmanaged ones are skipped) and
+// returns each attempted node's error, nil for a shutdown that was sent.
+func (r *Registry) ShutdownAll(ctx context.Context) map[string]error {
 	slog.Info("starting shutdown sequence")
+	results := make(map[string]error, len(r.Nodes))
 	for name, node := range r.Nodes {
 		if node.Unmanaged() {
 			slog.Info("skipping unmanaged node", "node", name)
 			continue
 		}
 		slog.Info("shutdown requested", "node", name)
-		node.Shutdown(ctx)
+		results[name] = node.Shutdown(ctx)
 	}
+	return results
 }
 
 func (r *Registry) Boot(ctx context.Context, name string) error {

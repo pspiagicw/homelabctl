@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/pspiagicw/homelabctl/apierr"
 	"github.com/pspiagicw/homelabctl/config"
@@ -13,22 +15,38 @@ import (
 
 // fakeBackend records boot order and returns a preset error per node.
 type fakeBackend struct {
-	booted []string
-	errs   map[string]error
+	mu       sync.Mutex
+	booted   []string
+	shutdown []string
+	errs     map[string]error
 }
 
 func (f *fakeBackend) Boot(_ context.Context, name string) (any, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.booted = append(f.booted, name)
 	return nil, f.errs[name]
+}
+func (f *fakeBackend) Shutdown(_ context.Context, name string) (any, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.shutdown = append(f.shutdown, name)
+	return nil, nil
+}
+func (f *fakeBackend) shutdowns() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.shutdown...)
 }
 func (f *fakeBackend) Status(context.Context) (any, error)               { return nil, nil }
 func (f *fakeBackend) ListNodes(context.Context) (any, error)            { return nil, nil }
 func (f *fakeBackend) GetNode(context.Context, string) (any, error)      { return nil, nil }
-func (f *fakeBackend) Shutdown(context.Context, string) (any, error)     { return nil, nil }
 func (f *fakeBackend) ListServices(context.Context) (any, error)         { return nil, nil }
 func (f *fakeBackend) RefreshNodes(context.Context) (any, error)         { return nil, nil }
 func (f *fakeBackend) ListProfiles(context.Context) (any, error)         { return nil, nil }
 func (f *fakeBackend) GetProfile(context.Context, string) (any, error)   { return nil, nil }
+func (f *fakeBackend) GetSchedule(context.Context) (any, error)          { return nil, nil }
+func (f *fakeBackend) ShutdownAllNodes(context.Context) (any, error)     { return nil, nil }
 func (f *fakeBackend) ApplyProfile(context.Context, string) (any, error) { return nil, nil }
 
 // setupManager creates a manager with "movie" (two nodes) and "off" (none).
@@ -141,4 +159,95 @@ func TestListDuringApply(t *testing.T) {
 		}
 	}
 	<-done
+}
+
+// shortAutoOff shortens the auto-off delay for one test.
+func shortAutoOff(t *testing.T, d time.Duration) {
+	saved := autoOffAfter
+	autoOffAfter = d
+	t.Cleanup(func() { autoOffAfter = saved })
+}
+
+// waitFor polls cond until it's true or a second passes.
+func waitFor(t *testing.T, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatal("condition not met within 1s")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func TestManualApplyAutoOffShutsDownBootedNodes(t *testing.T) {
+	shortAutoOff(t, 20*time.Millisecond)
+	p, b := setupManager(map[string]error{
+		// already on: must not be shut down by the auto-off
+		"falcon-heavy": fmt.Errorf("node online; %w", apierr.ErrConflict),
+	})
+
+	p.ApplyProfile(context.Background(), "movie", Manual)
+
+	pending := p.ListProfiles().AutoOff
+	if pending == nil || fmt.Sprint(pending.Nodes) != "[falcon2]" {
+		t.Fatalf("AutoOff = %+v, want falcon2 pending", pending)
+	}
+	waitFor(t, func() bool { return p.ListProfiles().LastAutoOff != nil })
+
+	if got := b.shutdowns(); fmt.Sprint(got) != "[falcon2]" {
+		t.Errorf("shut down %v, want only [falcon2]", got)
+	}
+	status := p.ListProfiles()
+	if status.AutoOff != nil {
+		t.Errorf("AutoOff still pending after it ran")
+	}
+	if r := status.LastAutoOff.Nodes; len(r) != 1 || r[0].Result != ShuttingDown {
+		t.Errorf("LastAutoOff = %+v, want falcon2 shutting", r)
+	}
+}
+
+func TestAutoOffShutsDownInReverseBootOrder(t *testing.T) {
+	shortAutoOff(t, 20*time.Millisecond)
+	p, b := setupManager(nil)
+
+	p.ApplyProfile(context.Background(), "movie", Manual)
+	waitFor(t, func() bool { return len(b.shutdowns()) == 2 })
+
+	if got := b.shutdowns(); fmt.Sprint(got) != "[falcon2 falcon-heavy]" {
+		t.Errorf("shut down %v, want reverse boot order", got)
+	}
+}
+
+func TestScheduledApplyHasNoAutoOff(t *testing.T) {
+	p, _ := setupManager(nil)
+
+	p.ApplyProfile(context.Background(), "movie", "schedule")
+
+	if p.ListProfiles().AutoOff != nil {
+		t.Errorf("AutoOff scheduled for a non-manual apply")
+	}
+}
+
+// TestSecondApplyMergesAndResetsAutoOff checks a later manual apply keeps the
+// earlier nodes pending and pushes the deadline back.
+func TestSecondApplyMergesAndResetsAutoOff(t *testing.T) {
+	p, b := setupManager(nil)
+	p.profiles["backup"] = Profile{Name: "backup", Nodes: []string{"falcon1", "falcon-heavy"}}
+
+	p.ApplyProfile(context.Background(), "movie", Manual)
+	first := p.ListProfiles().AutoOff.At
+	time.Sleep(5 * time.Millisecond)
+	p.ApplyProfile(context.Background(), "backup", Manual)
+
+	pending := p.ListProfiles().AutoOff
+	if fmt.Sprint(pending.Nodes) != "[falcon-heavy falcon2 falcon1]" {
+		t.Errorf("pending nodes %v, want movie's nodes plus falcon1", pending.Nodes)
+	}
+	if !pending.At.After(first) {
+		t.Errorf("deadline not reset: %v, first %v", pending.At, first)
+	}
+	if len(b.shutdowns()) != 0 {
+		t.Errorf("shut down early: %v", b.shutdowns())
+	}
 }

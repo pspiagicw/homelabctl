@@ -19,6 +19,9 @@ type API interface {
 	ListProfiles(ctx context.Context) (any, error)
 	GetProfile(ctx context.Context, name string) (any, error)
 	ApplyProfile(ctx context.Context, name string) (any, error)
+
+	GetSchedule(ctx context.Context) (any, error)
+	ShutdownAllNodes(ctx context.Context) (any, error)
 }
 
 // Power is what the sentinel needs to react to mains power changes.

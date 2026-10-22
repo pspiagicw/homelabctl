@@ -4,14 +4,17 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 	"sync"
 
 	"github.com/pspiagicw/homelabctl/api"
 	"github.com/pspiagicw/homelabctl/apierr"
 	"github.com/pspiagicw/homelabctl/catalog"
 	"github.com/pspiagicw/homelabctl/config"
+	"github.com/pspiagicw/homelabctl/logging"
 	"github.com/pspiagicw/homelabctl/node"
 	"github.com/pspiagicw/homelabctl/profile"
+	"github.com/pspiagicw/homelabctl/schedule"
 	"github.com/pspiagicw/homelabctl/sentinel"
 	"github.com/pspiagicw/homelabctl/web"
 )
@@ -22,6 +25,7 @@ type Orchestrator struct {
 	Catalog  *catalog.Catalog
 	Server   *api.Server
 	Profiles *profile.ProfileManager
+	Schedule *schedule.Scheduler
 }
 
 func NewOrchestrator(cfg *config.Config) *Orchestrator {
@@ -32,6 +36,12 @@ func NewOrchestrator(cfg *config.Config) *Orchestrator {
 	o.Server = api.NewServer(cfg, o)
 	o.Server.UI = web.New(o).Handler()
 	o.Profiles = profile.NewProfileManager(cfg, o)
+
+	sched, err := schedule.NewScheduler(cfg, o)
+	if err != nil {
+		logging.Fatal("invalid schedule", "error", err)
+	}
+	o.Schedule = sched
 
 	return o
 }
@@ -62,7 +72,7 @@ func (o *Orchestrator) Init() {
 func (o *Orchestrator) Start(ctx context.Context) {
 	slog.Info("orchestrator started!")
 	var wg sync.WaitGroup
-	wg.Add(4)
+	wg.Add(5)
 	go func() {
 		o.Server.Run(ctx)
 		wg.Done()
@@ -77,6 +87,10 @@ func (o *Orchestrator) Start(ctx context.Context) {
 	}()
 	go func() {
 		o.Catalog.Watch(ctx)
+		wg.Done()
+	}()
+	go func() {
+		o.Schedule.Watch(ctx)
 		wg.Done()
 	}()
 
@@ -146,6 +160,31 @@ func (o *Orchestrator) ShutdownAll(ctx context.Context) {
 	o.Registry.ShutdownAll(ctx)
 }
 
+// ShutdownAllNodes is the user-requested version of the outage shutdown: every
+// managed node is shut down, unmanaged nodes are left alone. It returns each
+// node's result; nodes that were already off show as skipped.
+func (o *Orchestrator) ShutdownAllNodes(ctx context.Context) (any, error) {
+	return o.ShutdownAllResults(ctx), nil
+}
+
+// ShutdownAllResults runs ShutdownAllNodes and returns typed results for the
+// web UI, in node-name order.
+func (o *Orchestrator) ShutdownAllResults(ctx context.Context) []profile.NodeResult {
+	errs := o.Registry.ShutdownAll(ctx)
+
+	names := make([]string, 0, len(errs))
+	for name := range errs {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	results := make([]profile.NodeResult, 0, len(names))
+	for _, name := range names {
+		results = append(results, profile.ShutdownResult(name, errs[name]))
+	}
+	return results
+}
+
 // RestoreAll runs when mains power is back. Nodes aren't booted yet; that
 // comes with the scheduler/profiles.
 func (o *Orchestrator) RestoreAll(ctx context.Context) {
@@ -190,20 +229,31 @@ func (o *Orchestrator) Boot(ctx context.Context, name string) (any, error) {
 	}, err
 }
 
-// ApplyProfile boots every node in the profile. The whole profile is refused
-// while the sentinel isn't Normal: booting onto battery power is never wanted.
+// ApplyProfile boots every node in the profile on request (UI/API); manual
+// applies also schedule an auto-off.
 func (o *Orchestrator) ApplyProfile(ctx context.Context, name string) (any, error) {
-	if o.Sentinel.State != sentinel.Normal {
-		err := fmt.Errorf("sentinel not Normal; profile %s not applied; %w", name, apierr.ErrConflict)
-		return Response{false, err.Error()}, err
-	}
-
-	applied, err := o.Profiles.ApplyProfile(ctx, name, "manual")
+	applied, err := o.applyProfile(ctx, name, profile.Manual)
 	if err != nil {
 		return Response{false, err.Error()}, err
 	}
 
 	return applied, nil
+}
+
+// ApplyScheduledProfile is called by the scheduler; it never schedules an
+// auto-off.
+func (o *Orchestrator) ApplyScheduledProfile(ctx context.Context, name string) (*profile.Applied, error) {
+	return o.applyProfile(ctx, name, schedule.Trigger)
+}
+
+// applyProfile refuses the whole profile while the sentinel isn't Normal:
+// booting onto battery power is never wanted.
+func (o *Orchestrator) applyProfile(ctx context.Context, name, trigger string) (*profile.Applied, error) {
+	if o.Sentinel.State != sentinel.Normal {
+		return nil, fmt.Errorf("sentinel not Normal; profile %s not applied; %w", name, apierr.ErrConflict)
+	}
+
+	return o.Profiles.ApplyProfile(ctx, name, trigger)
 }
 
 func (o *Orchestrator) GetProfile(ctx context.Context, name string) (any, error) {
@@ -222,4 +272,13 @@ func (o *Orchestrator) ListProfiles(ctx context.Context) (any, error) {
 // ProfileStatus is the typed profile overview for the web UI.
 func (o *Orchestrator) ProfileStatus() *profile.ProfileStatus {
 	return o.Profiles.ListProfiles()
+}
+
+func (o *Orchestrator) GetSchedule(ctx context.Context) (any, error) {
+	return o.Schedule.Status(), nil
+}
+
+// ScheduleStatus is the typed schedule overview for the web UI.
+func (o *Orchestrator) ScheduleStatus() *schedule.Status {
+	return o.Schedule.Status()
 }
