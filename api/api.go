@@ -7,25 +7,16 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/pspiagicw/homelabctl/backend"
 	"github.com/pspiagicw/homelabctl/config"
 	"github.com/pspiagicw/homelabctl/utils"
 )
-
-type Backend interface {
-	Status(ctx context.Context) (any, error)
-	ListNodes(ctx context.Context) (any, error)
-	GetNode(ctx context.Context, name string) (any, error)
-	Boot(ctx context.Context, name string) (any, error)
-	Shutdown(ctx context.Context, name string) (any, error)
-	ListServices(ctx context.Context) (any, error)
-	RefreshNodes(ctx context.Context) (any, error)
-}
 
 type Server struct {
 	cfg *config.Config
 
 	router  chi.Router
-	backend Backend
+	backend backend.API
 
 	// UI is the web interface, mounted at /ui when set.
 	UI http.Handler
@@ -37,7 +28,7 @@ type Server struct {
 	// NodeFunc     func(context.Context, string) []byte
 }
 
-func NewServer(config *config.Config, b Backend) *Server {
+func NewServer(config *config.Config, b backend.API) *Server {
 	s := &Server{
 		cfg:     config,
 		backend: b,

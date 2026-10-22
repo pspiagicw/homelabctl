@@ -40,20 +40,13 @@ type Response struct {
 func NewOrchestrator(cfg *config.Config) *Orchestrator {
 	o := &Orchestrator{}
 	o.Registry = node.NewRegistry(cfg)
-	o.Sentinel = sentinel.NewSentinel(cfg)
+	// The orchestrator is the sentinel's backend.Power: outage and restore
+	// actions call back into it.
+	o.Sentinel = sentinel.NewSentinel(cfg, o)
 	o.Service = service.NewService(cfg)
 	// Server also owns orchestrator!
 	o.Server = api.NewServer(cfg, o)
 	o.Server.UI = web.New(o).Handler()
-
-	o.Sentinel.SetFunc(
-		func(ctx context.Context) {
-			o.ShutdownAll(ctx)
-		},
-		func(context.Context) {
-			slog.Info("Restore function triggered!")
-		},
-	)
 
 	return o
 }
@@ -138,6 +131,12 @@ func (o *Orchestrator) Init() {
 
 func (o *Orchestrator) ShutdownAll(ctx context.Context) {
 	o.Registry.ShutdownAll(ctx)
+}
+
+// RestoreAll runs when mains power is back. Nodes aren't booted yet; that
+// comes with the scheduler/profiles.
+func (o *Orchestrator) RestoreAll(ctx context.Context) {
+	slog.Info("Restore function triggered!")
 }
 
 func (o *Orchestrator) Shutdown(ctx context.Context, name string) (any, error) {

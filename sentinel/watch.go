@@ -48,7 +48,7 @@ func (s *Sentinel) Watch(ctx context.Context) {
 			case OutageConfirmed:
 				slog.Warn("outage confirmed. starting shutdown sequence!")
 				// TODO: Check if we need to run this in a goroutine.
-				s.OnOutage(ctx)
+				s.Power.ShutdownAll(ctx)
 				if pingStatus {
 					slog.Warn("successfull ping, assuming sentinel online")
 					s.SetState(Restoring)
@@ -67,7 +67,7 @@ func (s *Sentinel) Watch(ctx context.Context) {
 			case Restored:
 				slog.Warn("outage restored, starting restore sequence!")
 				s.SetState(Normal)
-				s.OnRestore(ctx)
+				s.Power.RestoreAll(ctx)
 			}
 		}
 	}

@@ -1,11 +1,21 @@
 package sentinel
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/pspiagicw/homelabctl/config"
 )
+
+// fakePower counts the calls the sentinel makes on outage and restore.
+type fakePower struct {
+	shutdowns int
+	restores  int
+}
+
+func (f *fakePower) ShutdownAll(_ context.Context) { f.shutdowns++ }
+func (f *fakePower) RestoreAll(_ context.Context)  { f.restores++ }
 
 // TestSentinelSetState tests the SetState method behavior
 func TestSentinelSetState(t *testing.T) {
@@ -15,7 +25,7 @@ func TestSentinelSetState(t *testing.T) {
 		},
 	}
 
-	sentinel := NewSentinel(cfg)
+	sentinel := NewSentinel(cfg, &fakePower{})
 	
 	// Test initial state
 	if sentinel.State != Unkown {
@@ -49,7 +59,7 @@ func TestSentinelPing(t *testing.T) {
 		},
 	}
 
-	sentinel := NewSentinel(cfg)
+	sentinel := NewSentinel(cfg, &fakePower{})
 	
 	// Test ping that succeeds
 	mockPingFunc := func(address string) bool {
@@ -93,7 +103,7 @@ func TestSentinelInit(t *testing.T) {
 		},
 	}
 
-	sentinel := NewSentinel(cfg)
+	sentinel := NewSentinel(cfg, &fakePower{})
 	
 	// Mock ping to return true initially (online sentinel)
 	mockPingFunc := func(address string) bool {
@@ -133,7 +143,7 @@ func TestSentinelStateTransitions(t *testing.T) {
 		},
 	}
 
-	sentinel := NewSentinel(cfg)
+	sentinel := NewSentinel(cfg, &fakePower{})
 	
 	// Start with Normal state
 	sentinel.State = Normal
@@ -172,7 +182,7 @@ func TestSentinelStatus(t *testing.T) {
 		},
 	}
 
-	sentinel := NewSentinel(cfg)
+	sentinel := NewSentinel(cfg, &fakePower{})
 	sentinel.State = Normal
 	now := time.Now()
 	sentinel.LastSeen = now

@@ -3,13 +3,12 @@ package sentinel
 // TODO: Implement component based logging!
 
 import (
-	"context"
 	"log/slog"
 	"time"
 
 	"github.com/pspiagicw/homelabctl/agents"
+	"github.com/pspiagicw/homelabctl/backend"
 	"github.com/pspiagicw/homelabctl/config"
-	"github.com/pspiagicw/homelabctl/logging"
 	"github.com/pspiagicw/homelabctl/utils"
 )
 
@@ -31,8 +30,7 @@ type Sentinel struct {
 	GraceUpTime      int
 	GraceDownTime    int
 	Logger           *slog.Logger
-	OnOutage         func(context.Context)
-	OnRestore        func(context.Context)
+	Power            backend.Power // shuts down / restores nodes on outage and recovery
 	LastSeen         time.Time
 	LastTransitioned time.Time
 
@@ -48,23 +46,18 @@ type SentinelStatus struct {
 	LastTransitioned time.Time `json:"last_transitioned"`
 }
 
-func NewSentinel(cfg *config.Config) *Sentinel {
+func NewSentinel(cfg *config.Config, power backend.Power) *Sentinel {
 	return &Sentinel{
 		State:         Unkown,
 		cfg:           cfg.Sentinel,
+		Power:         power,
 		GraceUpTime:   0,
 		GraceDownTime: 0,
-		Log:           logging.WithComponent("SENTINEL"),
 
 		AfterFunc: utils.After,
 		PingFunc:  utils.Ping,
 	}
 
-}
-
-func (s *Sentinel) SetFunc(onOutage, onRestore func(context.Context)) {
-	s.OnOutage = onOutage
-	s.OnRestore = onRestore
 }
 
 // TODO: Implement Init(), ping and find out current sentinel status etc.

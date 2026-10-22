@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/pspiagicw/homelabctl/apierr"
+	"github.com/pspiagicw/homelabctl/backend"
 	"github.com/pspiagicw/homelabctl/config"
 	"github.com/pspiagicw/homelabctl/node"
 	"github.com/pspiagicw/homelabctl/sentinel"
@@ -54,3 +55,9 @@ func TestBootManagedDuringOutageBlocked(t *testing.T) {
 		t.Errorf("node.State = %s, want %s", got, node.OFF)
 	}
 }
+
+// The orchestrator must satisfy the interfaces its components call back into.
+var (
+	_ backend.API   = (*Orchestrator)(nil)
+	_ backend.Power = (*Orchestrator)(nil)
+)
