@@ -23,7 +23,6 @@ const (
 	Unkown          = "Unknown"
 )
 
-// TOOD: Implement last-seen and transision timestamps
 type Sentinel struct {
 	State            string
 	cfg              config.SentinelConfig
@@ -60,7 +59,6 @@ func NewSentinel(cfg *config.Config, power backend.Power) *Sentinel {
 
 }
 
-// TODO: Implement Init(), ping and find out current sentinel status etc.
 func (s *Sentinel) Init() {
 	pingStatus := s.Ping()
 
@@ -77,7 +75,6 @@ func (s *Sentinel) Init() {
 	slog.Info("sentinel initialized!")
 }
 
-// TODO: Implement pinging!
 func (s *Sentinel) Ping() bool {
 	// status := utils.Ping(s.cfg.Address)
 	status := s.PingFunc(s.cfg.Address)

@@ -30,7 +30,6 @@ const (
 	UNREACHABLE string = "unreachable"
 )
 
-// TODO: Implement services workflow
 type Node struct {
 	Name            string
 	cfg             config.NodeConfig
@@ -102,7 +101,6 @@ func NewNode(name string, cfg config.NodeConfig, ssh config.SSHConfig) *Node {
 	return n
 }
 
-// TODO: Initialize the node, check if it's online etc.
 func (n *Node) Init() {
 	n.IsReachable()
 	slog.Info("node initialized!", "node", n.Name, "status", n.State)
@@ -173,7 +171,6 @@ func (n *Node) Boot(ctx context.Context) error {
 		return fmt.Errorf("failed to shutdown node; node %s; error: %v; %w", n.Name, err, apierr.ErrUpstream)
 	}
 
-	// TODO: Check for ping to start etc.
 	n.State = BOOTING
 	go n.FinishBooting()
 	slog.Info("wol request sent", "node", n.Name)

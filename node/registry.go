@@ -11,6 +11,10 @@ import (
 	"github.com/pspiagicw/homelabctl/config"
 )
 
+// nodeRefreshInterval is how often every node is re-pinged in the background,
+// so state set outside the daemon (manual power on/off) doesn't stay stale.
+var nodeRefreshInterval = 15 * time.Minute
+
 type Registry struct {
 	Nodes map[string]*Node
 }
@@ -62,10 +66,10 @@ func (r *Registry) RefreshAll() {
 }
 
 // Watch calls RefreshAll every interval until ctx is cancelled.
-func (r *Registry) Watch(ctx context.Context, interval time.Duration) {
-	ticker := time.NewTicker(interval)
+func (r *Registry) Watch(ctx context.Context) {
+	ticker := time.NewTicker(nodeRefreshInterval)
 	defer ticker.Stop()
-	slog.Info("node refresher started", "interval", interval)
+	slog.Info("node refresher started", "interval", nodeRefreshInterval)
 
 	for {
 		select {

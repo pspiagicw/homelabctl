@@ -370,10 +370,15 @@ func TestRegistryWatchRefreshesAndStops(t *testing.T) {
 	}
 	r := &Registry{Nodes: map[string]*Node{"n": n}}
 
+	// Shorten the refresh interval for this test only.
+	saved := nodeRefreshInterval
+	nodeRefreshInterval = 10 * time.Millisecond
+	defer func() { nodeRefreshInterval = saved }()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
-		r.Watch(ctx, 10*time.Millisecond)
+		r.Watch(ctx)
 		close(done)
 	}()
 
