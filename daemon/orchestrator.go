@@ -196,7 +196,7 @@ func (o *Orchestrator) Start(ctx context.Context) {
 		wg.Done()
 	}()
 	go func() {
-		o.Sentinel.Run(ctx)
+		o.Sentinel.Watch(ctx)
 		wg.Done()
 	}()
 	go func() {

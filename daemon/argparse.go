@@ -23,7 +23,8 @@ var Daemon struct {
 func Run(version version.Info) {
 	Parse()
 	InitLogger()
-	config := ParseConfig(Daemon.Config)
+	config := config.New(Daemon.Config)
+	slog.Info("config loaded and validated!")
 
 	slog.Info("starting homelabctld", "version", version.Version, "commit", version.Commit, "buildDate", version.BuildDate)
 
@@ -32,7 +33,6 @@ func Run(version version.Info) {
 	ctx := context.Background()
 	o.Init()
 	o.Start(ctx)
-
 }
 
 func InitLogger() {
@@ -45,14 +45,4 @@ func InitLogger() {
 
 func Parse() {
 	kong.Parse(&Daemon, kong.Vars{"version": "homelabctld " + version.String()})
-}
-
-func ParseConfig(configPath string) *config.Config {
-	config := config.New(Daemon.Config)
-	if config == nil {
-		logging.Fatal("FATAL: failed to load config!")
-	}
-	slog.Info("config loaded and validated!")
-
-	return config
 }

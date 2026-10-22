@@ -13,7 +13,7 @@ func (s *Sentinel) SetState(state string) {
 	s.GraceUpTime = 0
 	s.LastTransitioned = time.Now()
 }
-func (s *Sentinel) Run(ctx context.Context) {
+func (s *Sentinel) Watch(ctx context.Context) {
 	ticker := time.NewTicker(time.Duration(s.cfg.CheckInterval) * time.Second)
 	slog.Info("sentinel started!")
 	slog.Info("sentinel info", "address", s.cfg.Address, "status", s.State)

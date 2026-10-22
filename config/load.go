@@ -1,41 +1,70 @@
 package config
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 
 	"github.com/adrg/xdg"
+	"github.com/pspiagicw/homelabctl/logging"
 	"gopkg.in/yaml.v3"
 )
 
-func load(configPath string) *Config {
+func read(configPath string) (*Config, error) {
 	contents, err := os.ReadFile(configPath)
 	if err != nil {
-		slog.Error("failed to read file", "file", configPath, "error", err)
-		return nil
+		return nil, fmt.Errorf("failed to read file (%s): %v", configPath, err)
 	}
 
 	var cfg *Config
 	err = yaml.Unmarshal(contents, &cfg)
 
 	if err != nil {
-		slog.Error("failed to load config", "file", configPath, "error", err)
-		return nil
+		return nil, fmt.Errorf("failed to load config (%s): %v", configPath, err)
 	}
 
-	return cfg
+	// An empty file unmarshals to a nil config without an error.
+	if cfg == nil {
+		return nil, fmt.Errorf("config is empty (%s)", configPath)
+	}
+
+	return cfg, nil
 }
 
 func New(configPath string) *Config {
+
+	path, err := getConfigPath(configPath)
+	if err != nil {
+		logging.Fatal("failed to load config", "error", err)
+	}
+
+	conf, err := read(path)
+
+	if err != nil {
+		logging.Fatal("failed to load config", "error", err)
+	}
+
+	err = Validate(conf)
+
+	if err != nil {
+		logging.Fatal("failed to load config", "error", err)
+	}
+
+	slog.Info("config path validated", "path", path)
+
+	return conf
+
+}
+
+func getConfigPath(configPath string) (string, error) {
+
 	if configPath == "" {
 		defaultPath, err := xdg.ConfigFile("homelabctl/config.yaml")
 		if err != nil {
-			slog.Error("failed to get default config path", "error", err)
-			return nil
+			return "", fmt.Errorf("failed to get default config path: %v", err)
 		}
 		configPath = defaultPath
 	}
-	slog.Info("config path validated", "path", configPath)
 
-	return load(configPath)
+	return configPath, nil
 }
