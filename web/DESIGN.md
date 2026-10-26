@@ -7,8 +7,9 @@ elsewhere (e.g. a blog). Source of truth: [`static/style.css`](static/style.css)
 
 - **Matte, solid colours.** Low-saturation fills, no gradients, no glossy effects.
 - **Flat surfaces.** Cards are separated by a 1px outline, not drop shadows.
-- **Monospace everywhere.** One typeface (JetBrains Mono) for body, headings
-  and code, so the page reads like a well-formatted terminal.
+- **Monospace everywhere.** Two monospace typefaces: Fira Code for body text
+  and code, Cascadia Code for headings and labels. The page reads like a
+  well-formatted terminal, with a little contrast between titles and text.
 - **Quiet chrome, loud state.** Labels and metadata are muted; colour is spent
   only on meaning (ok / warning / error, primary actions).
 - **Square-ish corners.** 3–8px radii, never fully round.
@@ -71,44 +72,74 @@ darker (light theme) or paler (dark theme) foreground for text on it.
 
 ## Typography
 
-- **Typeface:** [JetBrains Mono](https://www.jetbrains.com/lp/mono/), weights
-  400 and 600 only, self-hosted as woff2 (SIL Open Font License; ship the
-  licence file with the fonts). Get them from `@fontsource/jetbrains-mono`.
-- **Fallback stack:** `"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace`
+- **Body:** [Fira Code](https://github.com/tonsky/FiraCode), weights 400 and 700.
+- **Display** (headings, card and group titles, uppercase labels):
+  [Cascadia Code](https://github.com/microsoft/cascadia-code), weights 400 and 700.
+  "Caskaydia" is its Nerd Font build; on the web, plain Cascadia Code is the one to use.
+- **Files:** both are self-hosted as woff2 under the SIL Open Font License; ship
+  each licence file with its fonts. Get them from `@fontsource/fira-code` and
+  `@fontsource/cascadia-code`.
+- **Variables:** pick fonts only through `--font-body` and `--font-display`, so
+  swapping a typeface is a one-line change.
+- **Preload** the body's regular weight and the display's bold weight, since
+  those are used above the fold.
 - **Base:** 14px, line-height 1.55, `-webkit-font-smoothing: antialiased`.
 
-| Use | Size | Weight | Extra |
-|---|---|---|---|
-| Page title (top bar) | 17px | 600 | letter-spacing 0.2px |
-| Card / section heading | 17px | 600 | |
-| Body | 14px | 400 | |
-| Secondary text, descriptions | 12.5–13px | 400 | `--muted` |
-| Label / eyebrow above a heading | 11px | 400–600 | UPPERCASE, letter-spacing 1.2px, `--muted` |
-| Chips, tags | 10–11px | 600 | UPPERCASE, letter-spacing 0.8px |
-| Footer, timestamps | 11–12px | 400 | `--muted` |
+| Use | Font | Size | Weight | Extra |
+|---|---|---|---|---|
+| Page title (top bar) | display | 17px | 700 | letter-spacing 0.2px |
+| Card / section heading | display | 17px | 700 | |
+| Group title | display | 11px | 700 | UPPERCASE, letter-spacing 1.2px, `--muted` |
+| Label / eyebrow above a heading | display | 11px | 400 | UPPERCASE, letter-spacing 1.2px, `--muted` |
+| Body | body | 14px | 400 | |
+| Secondary text, descriptions | body | 12.5–13px | 400 | `--muted` |
+| Chips, tags | body | 10–11px | 600 (renders as 700) | UPPERCASE, letter-spacing 0.8px |
+| Footer, timestamps | body | 11–12px | 400 | `--muted` |
 
 ```css
 @font-face {
-	font-family: "JetBrains Mono";
-	src: url("/fonts/jetbrains-mono-400.woff2") format("woff2");
+	font-family: "Fira Code";
+	src: url("/fonts/fira-code-400.woff2") format("woff2");
 	font-weight: 400;
 	font-display: swap;
 }
 @font-face {
-	font-family: "JetBrains Mono";
-	src: url("/fonts/jetbrains-mono-600.woff2") format("woff2");
-	font-weight: 600;
+	font-family: "Fira Code";
+	src: url("/fonts/fira-code-700.woff2") format("woff2");
+	font-weight: 700;
 	font-display: swap;
+}
+@font-face {
+	font-family: "Cascadia Code";
+	src: url("/fonts/cascadia-code-400.woff2") format("woff2");
+	font-weight: 400;
+	font-display: swap;
+}
+@font-face {
+	font-family: "Cascadia Code";
+	src: url("/fonts/cascadia-code-700.woff2") format("woff2");
+	font-weight: 700;
+	font-display: swap;
+}
+:root {
+	--font-body: "Fira Code", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+	--font-display: "Cascadia Code", "Fira Code", ui-monospace, monospace;
 }
 body {
 	margin: 0;
 	background: var(--bg);
 	color: var(--on-surface);
-	font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+	font-family: var(--font-body);
 	font-size: 14px;
 	line-height: 1.55;
 	-webkit-font-smoothing: antialiased;
 }
+h1, h2, .label, .group-title { font-family: var(--font-display); }
+```
+
+```html
+<link rel="preload" href="/fonts/fira-code-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/cascadia-code-700.woff2" as="font" type="font/woff2" crossorigin>
 ```
 
 ## Shape and spacing

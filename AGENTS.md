@@ -69,7 +69,8 @@ api/
 web/
   web.go           Dashboard handlers and view model; web.Backend interface
   templates/       index.html (page), nodes.html (the polled "panel")
-  static/          style.css, ui.js, htmx.min.js, JetBrains Mono fonts (embedded with go:embed)
+  static/          style.css, ui.js, htmx.min.js, fonts: Fira Code (body), Cascadia Code
+                   (headings), each with its OFL licence (embedded with go:embed)
   DESIGN.md        Visual design system
 backend/           Interfaces: API (for the JSON server) and Power (for the sentinel)
 apierr/            ErrNotFound / ErrConflict / ErrUnavailable / ErrUpstream → 404 / 409 / 503 / 502
