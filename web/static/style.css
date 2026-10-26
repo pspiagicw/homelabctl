@@ -1,18 +1,33 @@
 /* Material-style layout, matte solid colors (no gradients), monospace type. */
+/* Fira Code for body text, Cascadia Code for headings and labels. */
 @font-face {
-	font-family: "JetBrains Mono";
-	src: url("/ui/static/jetbrains-mono-400.woff2") format("woff2");
+	font-family: "Fira Code";
+	src: url("/ui/static/fira-code-400.woff2") format("woff2");
 	font-weight: 400;
 	font-display: swap;
 }
 @font-face {
-	font-family: "JetBrains Mono";
-	src: url("/ui/static/jetbrains-mono-600.woff2") format("woff2");
-	font-weight: 600;
+	font-family: "Fira Code";
+	src: url("/ui/static/fira-code-700.woff2") format("woff2");
+	font-weight: 700;
+	font-display: swap;
+}
+@font-face {
+	font-family: "Cascadia Code";
+	src: url("/ui/static/cascadia-code-400.woff2") format("woff2");
+	font-weight: 400;
+	font-display: swap;
+}
+@font-face {
+	font-family: "Cascadia Code";
+	src: url("/ui/static/cascadia-code-700.woff2") format("woff2");
+	font-weight: 700;
 	font-display: swap;
 }
 
 :root {
+	--font-body: "Fira Code", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+	--font-display: "Cascadia Code", "Fira Code", ui-monospace, monospace;
 	--bg: #e6e7e9;
 	--surface: #f1f2f3;
 	--on-surface: #2b2f33;
@@ -67,7 +82,7 @@ body {
 	margin: 0;
 	background: var(--bg);
 	color: var(--on-surface);
-	font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+	font-family: var(--font-body);
 	font-size: 14px;
 	line-height: 1.55;
 	-webkit-font-smoothing: antialiased;
@@ -91,8 +106,9 @@ code { font-family: inherit; }
 }
 .app-bar h1 {
 	margin: 0;
+	font-family: var(--font-display);
 	font-size: 17px;
-	font-weight: 600;
+	font-weight: 700;
 	letter-spacing: 0.2px;
 }
 .prompt { color: var(--bar-muted); margin-right: 4px; }
@@ -154,12 +170,14 @@ main { min-width: 0; }
 }
 .card-head h2 {
 	margin: 2px 0 0;
+	font-family: var(--font-display);
 	font-size: 17px;
-	font-weight: 600;
+	font-weight: 700;
 	overflow-wrap: anywhere;
 }
 
 .label {
+	font-family: var(--font-display);
 	font-size: 11px;
 	color: var(--muted);
 	text-transform: uppercase;
@@ -315,8 +333,9 @@ main { min-width: 0; }
 }
 .events-head h2 {
 	margin: 2px 0 0;
+	font-family: var(--font-display);
 	font-size: 17px;
-	font-weight: 600;
+	font-weight: 700;
 }
 .events-count {
 	margin-left: 6px;
@@ -479,8 +498,9 @@ main { min-width: 0; }
 	align-items: center;
 	gap: 8px;
 	margin: 0 2px 10px;
+	font-family: var(--font-display);
 	font-size: 11px;
-	font-weight: 600;
+	font-weight: 700;
 	color: var(--muted);
 	text-transform: uppercase;
 	letter-spacing: 1.2px;
