@@ -265,6 +265,31 @@ A coloured left border marks the status of a card or list entry.
 .stripe-error { border-left: 4px solid var(--error-fg); }
 ```
 
+### Status dot
+A coloured dot plus a short label, for health at a glance. Solid dots carry a
+verdict; hollow and dashed ones mean "no verdict" (expected, or not checked yet).
+```css
+.health { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; }
+.health::before { content: ""; width: 8px; height: 8px; border-radius: 50%; box-sizing: border-box; }
+.health-up        { color: var(--ok-fg); }    .health-up::before   { background: var(--ok-fg); }
+.health-down      { color: var(--error-fg); } .health-down::before { background: var(--error-fg); }
+.health-asleep    { color: var(--muted); font-weight: 400; }
+.health-asleep::before    { border: 2px solid var(--muted); }
+.health-unchecked { color: var(--muted); font-weight: 400; }
+.health-unchecked::before { border: 1.5px dashed var(--muted); }
+```
+
+### Result chips
+Small tinted labels for the outcome of an action on one item (e.g. per-node
+results of applying a profile). Neutral by default; colour only for outcomes
+that need attention.
+```css
+.result { padding: 0 6px; border-radius: 3px; background: var(--neutral-bg); color: var(--neutral-fg); }
+.result-booting  { background: var(--ok-bg);    color: var(--ok-fg); }
+.result-shutting { background: var(--warn-bg);  color: var(--warn-fg); }
+.result-failed   { background: var(--error-bg); color: var(--error-fg); }
+```
+
 ### Blinking cursor
 The terminal touch next to a heading; it stops when the user prefers reduced motion.
 ```css

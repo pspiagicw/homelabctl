@@ -4,6 +4,27 @@ Granular, code-level breakdown of everything needed to build `homelabctl` from s
 
 ---
 
+## Status (2026-10-26, v0.3.0)
+
+Running on the Raspberry Pi (`falcon-control`). `[x]` is done, `[~]` was replaced by a different design or is only partly done, `[ ]` is open.
+
+The design changed from this plan in a few places:
+- **Overrides were replaced** by a manual profile apply with a 1-hour auto-off.
+- **The scheduler only acts at entry times.** It doesn't resolve a "current" profile and never replays missed entries.
+- **Applying a profile boots its nodes and shuts down every other managed node.**
+- **The web UI was built**, inside the daemon. The CLI wasn't.
+
+**Next up** (also in AGENTS.md):
+1. Boot the right profile after power is restored.
+2. Give a daemon restart during an outage the grace period.
+3. Lock node state.
+4. Enforce SSH host keys.
+5. Graceful shutdown.
+6. Daemon-side event log.
+7. Per-node stats agent.
+
+---
+
 ## Phase 0 — Project Scaffolding
 
 - [x] Init Go module: `go mod init github.com/<you>/homelabctl`
@@ -27,7 +48,7 @@ Granular, code-level breakdown of everything needed to build `homelabctl` from s
   test/integration/            # integration tests
   ```
 - [x] Add `.gitignore` (binaries, `*.log`, local config overrides)
-- [ ] Pick and vendor core deps:
+- [x] Pick and vendor core deps: — kong instead of cobra, log/slog + tint, gowol, pro-bing, chi; no websocket
   - [ ] `gopkg.in/yaml.v3` — config parsing
   - [ ] `github.com/spf13/cobra` — CLI framework
   - [ ] `golang.org/x/crypto/ssh` — SSH client (shutdown commands)
@@ -36,7 +57,7 @@ Granular, code-level breakdown of everything needed to build `homelabctl` from s
   - [ ] `github.com/gorilla/websocket` — WS for API
   - [ ] `github.com/go-chi/chi/v5` — HTTP routing for REST API
   - [ ] `go.uber.org/zap` (or `log/slog`) — structured logging
-- [ ] Set up `Makefile` with targets: `build`, `build-cli`, `build-daemon`, `test`, `lint`, `vet`
+- [x] Set up `Makefile` with targets: `build`, `build-cli`, `build-daemon`, `test`, `lint`, `vet`
 - [ ] Set up CI skeleton (GitHub Actions: build + vet + test on push)
 
 ---
@@ -50,17 +71,17 @@ Granular, code-level breakdown of everything needed to build `homelabctl` from s
 - [x] `type ProfileConfig struct` — Nodes []string (ordered)
 - [x] `type ScheduleEntry struct` — Time string, Profile string
 - [x] `type ScheduleConfig struct` — Timezone string, Entries []ScheduleEntry
-- [ ] `type OverridesConfig struct` — DefaultDuration time.Duration
+- [~] `type OverridesConfig struct` — DefaultDuration time.Duration — n/a: overrides replaced by manual profile apply + auto-off
 - [x] `type Config struct` — top-level: SSH, Sentinel, Nodes map[string]NodeConfig, Profiles map[string]ProfileConfig, Schedule, Overrides
-- [ ] Custom `UnmarshalYAML` for duration fields (`900s`, `1h`) → `time.Duration`
-- [ ] Custom `UnmarshalYAML` for `ScheduleEntry.Time` → validate `HH:MM` 24h format
+- [~] Custom `UnmarshalYAML` for duration fields (`900s`, `1h`) → `time.Duration` — n/a: durations are integer seconds
+- [~] Custom `UnmarshalYAML` for `ScheduleEntry.Time` → validate `HH:MM` 24h format — done in config.Validate instead
 
 ### 1.2 Loading (`internal/config/load.go`)
 - [x] `func Load(path string) (*Config, error)` — reads file, unmarshal YAML
 
 These 2 functions are part of command parsing, not loading. Loading should only take care of only loading.
 
-- [ ] Support `--config` flag override + default path resolution (`/etc/homelabctl/config.yaml`, then `./config.yaml`)
+- [x] Support `--config` flag override + default path resolution (`/etc/homelabctl/config.yaml`, then `./config.yaml`) — default is ~/.config/homelabctl/config.yaml (xdg)
 - [ ] Env var override support (e.g. `HOMELABCTL_CONFIG`)
 
 ### 1.3 Validation (`internal/config/validate.go`)
@@ -81,10 +102,10 @@ These 2 functions are part of command parsing, not loading. Loading should only 
 - [ ] Merge function: per-node `SSH` overrides merged onto global `SSH` defaults (`func MergeSSH(global, override *SSHConfig) SSHConfig`)
 
 ### 1.5 Tests (`internal/config/*_test.go`)
-- [ ] Table-driven test: valid config parses without error
-- [ ] Test: sentinel host duplicated in `nodes:` → validation error
-- [ ] Test: profile references undefined node → validation error
-- [ ] Test: malformed duration string → parse error
+- [x] Table-driven test: valid config parses without error
+- [x] Test: sentinel host duplicated in `nodes:` → validation error
+- [x] Test: profile references undefined node → validation error
+- [~] Test: malformed duration string → parse error — n/a: no duration strings
 - [ ] Test: per-node SSH override merges correctly, leaves other nodes on global default
 - [ ] Golden-file test against the finalized example `deploy/config/config.example.yaml`
 
@@ -99,22 +120,22 @@ These 2 functions are part of command parsing, not loading. Loading should only 
 
 ### 2.2 Wake-on-LAN (`internal/node/wol.go`)
 - [x] `func SendMagicPacket(mac string, broadcastAddr string) error`
-- [ ] Construct magic packet byte sequence (6x 0xFF + 16x MAC repeat) if not using a library
+- [~] Construct magic packet byte sequence (6x 0xFF + 16x MAC repeat) if not using a library — uses gowol
 - [ ] Unit test: verify packet byte structure for a known MAC
-- [ ] `func (n *Node) Boot(ctx context.Context) error` — sends WoL, logs event
+- [x] `func (n *Node) Boot(ctx context.Context) error` — sends WoL, logs event
 
 ### 2.3 SSH client (`internal/node/ssh.go`)
-- [ ] `func NewSSHClient(cfg config.SSHConfig, host string) (*ssh.Client, error)` — loads identity file, sets up `ssh.ClientConfig`
+- [x] `func NewSSHClient(cfg config.SSHConfig, host string) (*ssh.Client, error)` — loads identity file, sets up `ssh.ClientConfig` — utils.NewSSHClient
 - [ ] Host key verification callback using `known_hosts_file` when `strict_host_key_checking: true`; `ssh.InsecureIgnoreHostKey()` fallback path when false (log a warning every time this path is used)
-- [ ] `func (n *Node) RunCommand(ctx context.Context, cmd string) (stdout, stderr string, err error)` — opens session, runs, captures output
-- [ ] `func (n *Node) Shutdown(ctx context.Context) error` — runs `sudo shutdown -h now` (or configurable command), handles expected connection-drop error as success
+- [~] `func (n *Node) RunCommand(ctx context.Context, cmd string) (stdout, stderr string, err error)` — opens session, runs, captures output — utils.SSHRun; output isn't captured
+- [x] `func (n *Node) Shutdown(ctx context.Context) error` — runs `sudo shutdown -h now` (or configurable command), handles expected connection-drop error as success — runs `shutdown now` as the SSH user
 - [ ] Retry/backoff wrapper for transient SSH connection failures (`internal/node/retry.go`)
 - [ ] Unit test with an in-process fake SSH server (`golang.org/x/crypto/ssh` test server pattern) to verify `RunCommand` and `Shutdown` without real hardware
 
 ### 2.4 Health checks (`internal/node/health.go`)
-- [ ] `func Ping(ctx context.Context, address string, timeout time.Duration) (bool, error)` — ICMP echo
-- [ ] `func (n *Node) IsReachable(ctx context.Context) bool` wraps `Ping`
-- [ ] `func (n *Node) WaitUntilReady(ctx context.Context) error` — static `wait_after_boot` sleep implementation (v1)
+- [x] `func Ping(ctx context.Context, address string, timeout time.Duration) (bool, error)` — ICMP echo — utils.Ping (pro-bing, unprivileged)
+- [x] `func (n *Node) IsReachable(ctx context.Context) bool` wraps `Ping`
+- [x] `func (n *Node) WaitUntilReady(ctx context.Context) error` — static `wait_after_boot` sleep implementation (v1) — FinishBooting / FinishShutdown
 - [ ] Stub `Prober` interface now so Phase-9 polling-based readiness can slot in without reshaping callers:
   ```go
   type Prober interface {
@@ -124,31 +145,31 @@ These 2 functions are part of command parsing, not loading. Loading should only 
 - [ ] `StaticWaitProber` struct implementing `Prober` using `wait_after_boot` (default/current implementation)
 
 ### 2.5 Node registry (`internal/node/registry.go`)
-- [ ] `type Registry struct` — map of all configured nodes + sentinel, built from `config.Config` at daemon startup
-- [ ] `func NewRegistry(cfg *config.Config) (*Registry, error)`
-- [ ] `func (r *Registry) Get(name string) (*Node, error)`
-- [ ] `func (r *Registry) All() []*Node` (excludes sentinel/always-on where relevant, with explicit filter methods: `func (r *Registry) Managed() []*Node`)
+- [x] `type Registry struct` — map of all configured nodes + sentinel, built from `config.Config` at daemon startup
+- [x] `func NewRegistry(cfg *config.Config) (*Registry, error)`
+- [~] `func (r *Registry) Get(name string) (*Node, error)` — Registry.Nodes map; no Get
+- [~] `func (r *Registry) All() []*Node` (excludes sentinel/always-on where relevant, with explicit filter methods: `func (r *Registry) Managed() []*Node`) — ShutdownAll skips unmanaged nodes; no Managed()
 
 ---
 
 ## Phase 3 — Sentinel (Power-Outage Watchdog)
 
 ### 3.1 State machine (`internal/sentinel/state.go`)
-- [ ] `type SentinelState int` — enum: `Normal`, `OutageDetected`, `OutageConfirmed`, `Restoring`, `Restored`
-- [ ] `type Sentinel struct` — holds state, config.SentinelConfig, last-seen timestamp, transition timestamps
-- [ ] `func NewSentinel(cfg config.SentinelConfig) *Sentinel`
+- [x] `type SentinelState int` — enum: `Normal`, `OutageDetected`, `OutageConfirmed`, `Restoring`, `Restored` — string constants
+- [x] `type Sentinel struct` — holds state, config.SentinelConfig, last-seen timestamp, transition timestamps
+- [x] `func NewSentinel(cfg config.SentinelConfig) *Sentinel`
 
 ### 3.2 Watch loop (`internal/sentinel/watch.go`)
-- [ ] `func (s *Sentinel) Run(ctx context.Context, onOutage, onRestore func(context.Context)) error` — ticks every `check_interval`
-- [ ] Transition logic: ping fails → start grace timer → if still failing after `outage_grace_period` → fire `onOutage`
-- [ ] Transition logic: ping succeeds after outage → start restore timer → if still succeeding after `restore_grace_period` → fire `onRestore`
-- [ ] Handle flapping: a single successful ping during the outage grace period resets the grace timer (define this explicitly — decide and document the exact debounce rule)
-- [ ] Emit structured log line on every state transition (for later API/WebUI surfacing)
+- [x] `func (s *Sentinel) Run(ctx context.Context, onOutage, onRestore func(context.Context)) error` — ticks every `check_interval` — Sentinel.Watch, calls backend.Power instead of callbacks
+- [x] Transition logic: ping fails → start grace timer → if still failing after `outage_grace_period` → fire `onOutage`
+- [x] Transition logic: ping succeeds after outage → start restore timer → if still succeeding after `restore_grace_period` → fire `onRestore`
+- [x] Handle flapping: a single successful ping during the outage grace period resets the grace timer (define this explicitly — decide and document the exact debounce rule) — a successful ping in OutageDetected returns to Normal
+- [x] Emit structured log line on every state transition (for later API/WebUI surfacing) — SetState logs every transition
 
 ### 3.3 Outage/restore actions (`internal/sentinel/actions.go`)
-- [ ] `func (s *Sentinel) ShutdownAll(ctx context.Context, reg *node.Registry) error` — shuts down managed nodes in reverse of last-known-active profile order
+- [~] `func (s *Sentinel) ShutdownAll(ctx context.Context, reg *node.Registry) error` — shuts down managed nodes in reverse of last-known-active profile order — Orchestrator.ShutdownAll → Registry.ShutdownAll, every managed node, not in profile order
 - [ ] `func (s *Sentinel) RestoreAll(ctx context.Context, reg *node.Registry, resumeProfile func() string) error` — WoLs nodes back per the profile that *should* be active now (queries scheduler for current time slot)
-- [ ] Persist "sentinel is currently overriding" flag so scheduler/override logic can check and defer (`internal/sentinel/override_flag.go` or shared state in daemon)
+- [x] Persist "sentinel is currently overriding" flag so scheduler/override logic can check and defer (`internal/sentinel/override_flag.go` or shared state in daemon) — the orchestrator checks Sentinel.State before any boot or profile apply
 
 ### 3.4 Tests
 - [ ] Simulate ping failures via fake `Pinger` interface — verify grace period timing triggers outage exactly once
@@ -160,58 +181,58 @@ These 2 functions are part of command parsing, not loading. Loading should only 
 ## Phase 4 — Scheduler
 
 ### 4.1 Profile resolution (`internal/scheduler/profile.go`)
-- [ ] `func (s *Scheduler) CurrentProfile(now time.Time) (string, error)` — walks `schedule.entries`, finds the latest entry whose time is ≤ now (with wraparound for entries before midnight vs after)
+- [~] `func (s *Scheduler) CurrentProfile(now time.Time) (string, error)` — walks `schedule.entries`, finds the latest entry whose time is ≤ now (with wraparound for entries before midnight vs after) — not built: the scheduler only acts at entry times (nextAfter); no current-profile resolution
 - [x] `func (s *Scheduler) NextTransition(now time.Time) (time.Time, string, error)` — for daemon's sleep-until-next-tick loop — schedule.Scheduler.nextAfter
 
 ### 4.2 Scheduler runtime (`internal/scheduler/scheduler.go`)
-- [ ] `type Scheduler struct` — holds `config.ScheduleConfig`, `config.Profiles`, reference to `node.Registry`
-- [ ] `func (s *Scheduler) ApplyProfile(ctx context.Context, name string) error` — computes diff between currently-active nodes and target profile's nodes
-- [ ] Boot new nodes in **list order** (respecting `wait_after_boot`/Prober between each, or parallel-with-stagger — decide and document)
+- [x] `type Scheduler struct` — holds `config.ScheduleConfig`, `config.Profiles`, reference to `node.Registry` — schedule.Scheduler, applies via schedule.Applier
+- [x] `func (s *Scheduler) ApplyProfile(ctx context.Context, name string) error` — computes diff between currently-active nodes and target profile's nodes — profile.ProfileManager.ApplyProfile: boots the profile, shuts down every other managed node
+- [x] Boot new nodes in **list order** (respecting `wait_after_boot`/Prober between each, or parallel-with-stagger — decide and document) — list order, WoL sent without waiting between nodes
 - [x] Shut down nodes no longer in profile, in **reverse list order** of the *previous* profile — profile.ApplyProfile shuts down every managed node not in the profile (manual and scheduled)
 - [x] Ignore nodes with `unmanaged: true`: never booted or shut down by profile changes (manual control only) — unmanaged nodes can't be in profiles and are never shut down
 - [x] `func (s *Scheduler) Run(ctx context.Context) error` — main loop: sleep until `NextTransition`, call `ApplyProfile`, repeat; select on ctx.Done() and an interrupt channel (for override/sentinel preemption) — schedule.Scheduler.Watch; applies boot-only profiles at entry times, no interrupt channel yet
 
 ### 4.3 Interruption handling (`internal/scheduler/interrupt.go`)
-- [ ] Channel-based signal so `override` and `sentinel` packages can pause/resume the scheduler loop without racing the ticker
-- [ ] `func (s *Scheduler) Pause(reason string)` / `func (s *Scheduler) Resume()`
-- [ ] On resume, recompute `CurrentProfile(time.Now())` and reconcile (don't blindly replay missed transitions)
+- [~] Channel-based signal so `override` and `sentinel` packages can pause/resume the scheduler loop without racing the ticker — n/a: the sentinel rule is checked at apply time instead
+- [~] `func (s *Scheduler) Pause(reason string)` / `func (s *Scheduler) Resume()` — n/a
+- [~] On resume, recompute `CurrentProfile(time.Now())` and reconcile (don't blindly replay missed transitions) — n/a: missed entries are never replayed
 
 ### 4.4 Tests
-- [ ] Table-driven test for `CurrentProfile` across all schedule entries + edge cases (exactly on a boundary, before first entry, after last entry, midnight wraparound)
-- [ ] Test `ApplyProfile` diff logic: verify correct boot/shutdown sets and ordering for several from→to profile transitions
-- [ ] Test pause/resume doesn't double-apply a profile
+- [x] Table-driven test for `CurrentProfile` across all schedule entries + edge cases (exactly on a boundary, before first entry, after last entry, midnight wraparound) — TestNextAfter, TestWatchAppliesEntriesInOrder
+- [x] Test `ApplyProfile` diff logic: verify correct boot/shutdown sets and ordering for several from→to profile transitions — profile tests: switching, shutdown order
+- [~] Test pause/resume doesn't double-apply a profile — n/a
 
 ---
 
 ## Phase 5 — Manual Overrides
 
 ### 5.1 Override state (`internal/override/override.go`)
-- [ ] `type Override struct` — Profile string, ExpiresAt *time.Time (nil = indefinite), CreatedAt time.Time
-- [ ] `type Manager struct` — current override (or nil), reference to Scheduler
-- [ ] `func (m *Manager) Set(ctx context.Context, profile string, duration *time.Duration) error` — nil duration + explicit `indefinite bool` flag, or duration defaulting to `overrides.default_duration`
-- [ ] `func (m *Manager) Clear(ctx context.Context) error` — cancels early, hands control back to scheduler, immediately reconciles to `CurrentProfile(now)`
+- [~] `type Override struct` — Profile string, ExpiresAt *time.Time (nil = indefinite), CreatedAt time.Time — replaced: manual profile apply + 1h auto-off (profile/autooff.go)
+- [~] `type Manager struct` — current override (or nil), reference to Scheduler — replaced
+- [~] `func (m *Manager) Set(ctx context.Context, profile string, duration *time.Duration) error` — nil duration + explicit `indefinite bool` flag, or duration defaulting to `overrides.default_duration` — replaced
+- [~] `func (m *Manager) Clear(ctx context.Context) error` — cancels early, hands control back to scheduler, immediately reconciles to `CurrentProfile(now)` — replaced: any apply cancels the auto-off
 
 ### 5.2 Expiry watcher (`internal/override/expiry.go`)
-- [ ] Timer-based expiry (not polling) using `time.AfterFunc`, cancelable on `Clear`
-- [ ] On expiry, call `Manager.Clear` internally and log the transition
+- [x] Timer-based expiry (not polling) using `time.AfterFunc`, cancelable on `Clear` — auto-off uses time.AfterFunc + a generation counter
+- [~] On expiry, call `Manager.Clear` internally and log the transition — replaced
 
 ### 5.3 Precedence integration
-- [ ] Wire into daemon orchestrator: precedence order is **Sentinel > Override > Schedule** — document this explicitly in code comments at the integration point
-- [ ] Ensure sentinel outage detection forcibly clears/suspends an active override (per finalized design: sentinel fully overrides both)
+- [x] Wire into daemon orchestrator: precedence order is **Sentinel > Override > Schedule** — document this explicitly in code comments at the integration point — sentinel check in Orchestrator.applyProfile
+- [~] Ensure sentinel outage detection forcibly clears/suspends an active override (per finalized design: sentinel fully overrides both) — replaced: the outage shutdown covers every managed node
 
 ### 5.4 Tests
-- [ ] Test override with `--for 30m` expires and correctly hands back to schedule's current profile
-- [ ] Test `--indefinite` never auto-expires until explicit `clear`
-- [ ] Test sentinel outage during an active override suspends it, and restore correctly resumes prior override state (or discards it — decide and document, then test that exact behavior)
+- [~] Test override with `--for 30m` expires and correctly hands back to schedule's current profile — replaced by auto-off tests
+- [~] Test `--indefinite` never auto-expires until explicit `clear` — n/a
+- [~] Test sentinel outage during an active override suspends it, and restore correctly resumes prior override state (or discards it — decide and document, then test that exact behavior) — n/a
 
 ---
 
 ## Phase 6 — Daemon Core
 
 ### 6.1 Orchestrator (`internal/daemon/orchestrator.go`)
-- [ ] `type Orchestrator struct` — owns Registry, Scheduler, Override Manager, Sentinel; single source of truth for "what should be running right now"
-- [ ] `func (o *Orchestrator) Start(ctx context.Context) error` — starts sentinel watch loop, scheduler loop, override expiry watcher as goroutines under an `errgroup.Group`
-- [ ] `func (o *Orchestrator) Status() DaemonStatus` — snapshot struct for API/CLI consumption (current profile, override info, sentinel state, per-node power state)
+- [x] `type Orchestrator struct` — owns Registry, Scheduler, Override Manager, Sentinel; single source of truth for "what should be running right now"
+- [x] `func (o *Orchestrator) Start(ctx context.Context) error` — starts sentinel watch loop, scheduler loop, override expiry watcher as goroutines under an `errgroup.Group` — sync.WaitGroup; server, sentinel, node refresher, catalog, scheduler
+- [x] `func (o *Orchestrator) Status() DaemonStatus` — snapshot struct for API/CLI consumption (current profile, override info, sentinel state, per-node power state) — /status: sentinel + nodes
 - [ ] Graceful shutdown: `func (o *Orchestrator) Stop(ctx context.Context) error` — cancels goroutines, does **not** shut down managed nodes (daemon restart ≠ power event)
 
 ### 6.2 Event log / audit trail (`internal/daemon/eventlog.go`)
@@ -220,32 +241,32 @@ These 2 functions are part of command parsing, not loading. Loading should only 
 - [ ] `func (o *Orchestrator) RecentEvents(n int) []Event` for API/CLI `homelabctl status --history`
 
 ### 6.3 Entrypoint (`cmd/homelabctld/main.go`)
-- [ ] Parse flags (`--config`, `--log-level`)
-- [ ] Load + validate config, exit non-zero with clear error on failure
-- [ ] Set up logger (`internal/logging`)
-- [ ] Construct Registry → Scheduler → Sentinel → Override Manager → Orchestrator
-- [ ] Start orchestrator, start API server (Phase 7), block on OS signal (SIGINT/SIGTERM) for graceful shutdown
+- [x] Parse flags (`--config`, `--log-level`) — kong: --config, --log-level, --log-format, --version
+- [x] Load + validate config, exit non-zero with clear error on failure
+- [x] Set up logger (`internal/logging`)
+- [x] Construct Registry → Scheduler → Sentinel → Override Manager → Orchestrator
+- [~] Start orchestrator, start API server (Phase 7), block on OS signal (SIGINT/SIGTERM) for graceful shutdown — no SIGINT/SIGTERM handling yet
 
 ---
 
 ## Phase 7 — Internal API (REST/WebSocket)
 
 ### 7.1 Route definitions (`internal/api/router.go`)
-- [ ] `GET /v1/status` — full `DaemonStatus` JSON
-- [ ] `GET /v1/nodes` — list nodes + state
-- [ ] `GET /v1/nodes/{name}` — single node detail
-- [ ] `POST /v1/nodes/{name}/boot` — manual single-node boot (out-of-band of profiles)
-- [ ] `POST /v1/nodes/{name}/shutdown`
-- [ ] `GET /v1/profiles` — list configured profiles
-- [ ] `POST /v1/override` — body: `{profile, duration_seconds|indefinite}`
-- [ ] `DELETE /v1/override` — clear active override
-- [ ] `GET /v1/schedule` — current schedule + next transition
+- [x] `GET /v1/status` — full `DaemonStatus` JSON — routes have no /v1 prefix
+- [x] `GET /v1/nodes` — list nodes + state
+- [x] `GET /v1/nodes/{name}` — single node detail
+- [x] `POST /v1/nodes/{name}/boot` — manual single-node boot (out-of-band of profiles)
+- [x] `POST /v1/nodes/{name}/shutdown`
+- [x] `GET /v1/profiles` — list configured profiles
+- [~] `POST /v1/override` — body: `{profile, duration_seconds|indefinite}` — n/a: POST /profiles/{name}/apply instead
+- [~] `DELETE /v1/override` — clear active override — n/a
+- [x] `GET /v1/schedule` — current schedule + next transition
 - [ ] `GET /v1/events?limit=N` — recent event log
 - [ ] `GET /v1/ws` — WebSocket upgrade for live status/event streaming
 
 ### 7.2 Handlers (`internal/api/handlers.go`)
-- [ ] Each route → thin handler calling into `Orchestrator`/`Manager`, JSON encode/decode, proper HTTP status codes (400 for bad profile name, 409 for conflicting override, etc.)
-- [ ] Request validation middleware (decode + validate body before hitting orchestrator)
+- [x] Each route → thin handler calling into `Orchestrator`/`Manager`, JSON encode/decode, proper HTTP status codes (400 for bad profile name, 409 for conflicting override, etc.) — apierr → 404/409/502/503
+- [~] Request validation middleware (decode + validate body before hitting orchestrator) — n/a: no request bodies
 
 ### 7.3 WebSocket broadcaster (`internal/api/ws.go`)
 - [ ] Hub pattern: `type Hub struct` managing connected clients, broadcast channel
@@ -253,16 +274,16 @@ These 2 functions are part of command parsing, not loading. Loading should only 
 - [ ] Ping/pong keepalive, clean disconnect handling
 
 ### 7.4 Middleware (`internal/api/middleware.go`)
-- [ ] Request logging middleware
+- [x] Request logging middleware — chi middleware.Logger
 - [ ] Recover-from-panic middleware
-- [ ] (Local-only for v1 — bind to `127.0.0.1` per config; note auth is explicitly deferred until WebUI phase needs remote exposure)
+- [~] (Local-only for v1 — bind to `127.0.0.1` per config; note auth is explicitly deferred until WebUI phase needs remote exposure) — decided: binds :3000 on all interfaces for LAN/Tailscale, no auth
 
 ### 7.5 Server lifecycle (`internal/api/server.go`)
-- [ ] `func NewServer(cfg config.DaemonConfig, orch *daemon.Orchestrator) *Server`
+- [x] `func NewServer(cfg config.DaemonConfig, orch *daemon.Orchestrator) *Server`
 - [ ] Graceful `http.Server` shutdown wired into daemon's Stop()
 
 ### 7.6 Tests
-- [ ] `httptest`-based tests for every route: happy path + validation-error path
+- [x] `httptest`-based tests for every route: happy path + validation-error path — api/api_test.go
 - [ ] WebSocket test: connect, trigger a status change via orchestrator, assert message received
 
 ---
@@ -299,24 +320,42 @@ These 2 functions are part of command parsing, not loading. Loading should only 
 
 ## Phase 9 — Deployment (falcon-control)
 
-- [ ] Procure/image the Raspberry Pi for falcon-control (hardware step — outside code)
-- [ ] Write `deploy/systemd/homelabctld.service` unit file (matches `daemon.systemd` config block: unit name, restart policy, `After=network-online.target`)
-- [ ] Write install script (`deploy/install.sh`): copies binaries to `/usr/local/bin`, config to `/etc/homelabctl/`, sets up `/etc/homelabctl/keys/`, enables + starts systemd unit
-- [ ] Cross-compile for Raspberry Pi arch (`GOOS=linux GOARCH=arm64` or `arm` depending on Pi model) in `Makefile`
-- [ ] Migrate Pi-hole, UpSnap, Tailscale from falcon1 → falcon-control (infra step, document runbook in `deploy/MIGRATION.md`)
-- [ ] Generate/distribute the shared SSH keypair (or per-node keys, per earlier decision) to all managed nodes' `authorized_keys`
-- [ ] Smoke test: full profile transition cycle (`backup` → `movie` → `off`) against real hardware
+- [x] Procure/image the Raspberry Pi for falcon-control (hardware step — outside code) — Raspberry Pi 5, Debian 13
+- [x] Write `deploy/systemd/homelabctld.service` unit file (matches `daemon.systemd` config block: unit name, restart policy, `After=network-online.target`) — user unit, deploy/systemd/homelabctld.service
+- [~] Write install script (`deploy/install.sh`): copies binaries to `/usr/local/bin`, config to `/etc/homelabctl/`, sets up `/etc/homelabctl/keys/`, enables + starts systemd unit — make deploy / make deploy-config, see deploy/README.md
+- [x] Cross-compile for Raspberry Pi arch (`GOOS=linux GOARCH=arm64` or `arm` depending on Pi model) in `Makefile` — make build-pi
+- [~] Migrate Pi-hole, UpSnap, Tailscale from falcon1 → falcon-control (infra step, document runbook in `deploy/MIGRATION.md`) — Pi-hole runs on the Pi; UpSnap and Uptime Kuma are replaced by homelabctl
+- [x] Generate/distribute the shared SSH keypair (or per-node keys, per earlier decision) to all managed nodes' `authorized_keys`
+- [x] Smoke test: full profile transition cycle (`backup` → `movie` → `off`) against real hardware — running on the daily schedule
 - [ ] Smoke test: simulate an outage (unplug/pause falcon-lite reachability) and confirm shutdown/restore cycle end-to-end
 
 ---
 
 ## Phase 10 — Polish & Deferred Items
 
-- [ ] Replace `StaticWaitProber` with a real polling `Prober` implementation (e.g. HTTP health-check against Jellyfin/Immich ports on falcon-heavy) — swap-in only, thanks to the interface from Phase 2.4
+- [~] Replace `StaticWaitProber` with a real polling `Prober` implementation (e.g. HTTP health-check against Jellyfin/Immich ports on falcon-heavy) — swap-in only, thanks to the interface from Phase 2.4 — services are HTTP-checked (catalog); node readiness still uses static waits
 - [ ] Color output for CLI tables (respect `NO_COLOR` env var, TTY detection)
-- [ ] WebUI: htmx + server-rendered Go templates consuming the same `internal/api` routes (separate track — flag for its own development plan once core CLI is stable)
+- [x] WebUI: htmx + server-rendered Go templates consuming the same `internal/api` routes (separate track — flag for its own development plan once core CLI is stable) — web UI built; it calls the orchestrator in-process, not the API
 - [ ] Config hot-reload (SIGHUP or file-watch) instead of requiring daemon restart on config changes
 - [ ] Structured metrics endpoint (`/v1/metrics` — Prometheus format) if you want dashboarding later
+
+---
+
+## Phase 11 — Built beyond the original plan
+
+- [x] Unmanaged nodes (`unmanaged: true`): manual only, skipped by the outage shutdown, can't be in profiles
+- [x] Node refresh: re-ping before boot/shutdown, every 15 minutes, and on demand (`POST /nodes/refresh`)
+- [x] Service catalog (`catalog/`): services from config, HTTP health checks every minute, `GET /services`
+- [x] Profile switching: apply boots the profile and shuts down every other managed node, with per-node results
+- [x] Auto-off: a manual apply shuts its booted nodes down again after 1 hour; any apply cancels it
+- [x] Shut down all (`POST /nodes/shutdown-all`, dashboard button)
+- [x] Web dashboard: sentinel, nodes, profiles, schedule, services with health, event history (browser-side)
+- [x] Full config validation of every section
+- [ ] Restore after outage: apply the profile that should be active now
+- [ ] Sentinel starts in `OutageDetected` so a restart gets the outage grace period
+- [ ] Mutex on `Node`; `runAutoOff` takes `applyMu`
+- [ ] Daemon-side event log (JSONL), replacing the browser-only history
+- [ ] Per-node stats agent for the Proxmox nodes
 
 ---
 

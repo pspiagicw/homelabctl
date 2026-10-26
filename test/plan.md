@@ -1,6 +1,12 @@
 # API Test Plan — homelabctl
 
-> Status: plan only, nothing implemented yet.
+> **Status (2026-10-26): historical. Most of this plan is implemented;** it's kept as a record of the design. Where the code differs:
+> - **Status codes:** errors now map to HTTP codes through `apierr` and `utils.ParseErrCode` (404 / 409 / 502 / 503). Successful boots and shutdowns return **200**, not 202.
+> - **Outages:** a boot or profile apply refused because the sentinel isn't `Normal` returns **409**, not 503.
+> - **Testability:** the router is exposed through `Server.Handler()`, and ping, WoL, SSH and timers are injected (`agents/`), so tests use `httptest` and fakes.
+> - **Tests that exist:** `api/api_test.go`, `node/node_test.go`, `sentinel/sentinel_test.go`, `daemon/orchestrator_test.go`, plus `profile/`, `schedule/`, `catalog/`, `config/` and `web/`.
+> - **Still open from this plan:** a test of the `Sentinel.Watch` loop and its grace timing, locking on node state (section 1's data races), and the optional integration tests.
+>
 > Scope: the HTTP API in `api/api.go`, plus the layers under it (`daemon/orchestrator.go`, `node/`, `sentinel/`) that decide what the API returns.
 
 ---

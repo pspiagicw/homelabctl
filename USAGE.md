@@ -1,243 +1,198 @@
 # homelabctl — Usage Guide
 
-Example-driven walkthrough of the `homelabctl` CLI. For the project overview, architecture, and design rationale, see [`README.md`](./README.md).
+How to use a running `homelabctld`: the web dashboard, the JSON API, and the config. For the overview and design, see [`README.md`](./README.md); for deploying to a Raspberry Pi, see [`deploy/README.md`](./deploy/README.md).
+
+There is no CLI yet. Everything goes through the dashboard or the API.
 
 ---
 
 ## Table of Contents
 
-- [Installation](#installation)
-- [Quickstart](#quickstart)
-- [Checking status](#checking-status)
-- [Managing nodes](#managing-nodes)
-- [Working with profiles](#working-with-profiles)
-- [Manual overrides](#manual-overrides)
-- [Viewing the schedule](#viewing-the-schedule)
-- [Event history](#event-history)
-- [JSON output for scripting](#json-output-for-scripting)
-- [Global flags](#global-flags)
+- [Running the daemon](#running-the-daemon)
+- [The dashboard](#the-dashboard)
+- [Nodes](#nodes)
+- [Profiles](#profiles)
+- [The schedule](#the-schedule)
+- [Services](#services)
+- [During a power outage](#during-a-power-outage)
+- [JSON API](#json-api)
+- [Configuration](#configuration)
 
 ---
 
-## Installation
-
-<!-- GIF: terminal install walkthrough — download binary, move to /usr/local/bin, systemctl enable -->
-![install-demo](./docs/gifs/install.gif)
+## Running the daemon
 
 ```bash
-# Download the latest release for your architecture
-curl -LO https://github.com/pspiagicw/homelabctl/releases/latest/download/homelabctl_linux_arm64.tar.gz
-tar -xzf homelabctl_linux_arm64.tar.gz
-
-# Install the CLI and daemon
-sudo mv homelabctl homelabctld /usr/local/bin/
-
-# Copy the example config and edit it for your fleet
-sudo mkdir -p /etc/homelabctl
-sudo cp deploy/config/config.example.yaml /etc/homelabctl/config.yaml
-sudo $EDITOR /etc/homelabctl/config.yaml
-
-# Enable and start the daemon
-sudo cp deploy/systemd/homelabctld.service /etc/systemd/system/
-sudo systemctl enable --now homelabctld
+make build-daemon
+./bin/homelabctld --config ./config.yaml
+./bin/homelabctld --version
 ```
+
+| Flag | Description |
+|---|---|
+| `--config <path>` | Config file. Default: `~/.config/homelabctl/config.yaml` |
+| `--log-level` | `debug`, `info` (default), `warn`, `error` |
+| `--log-format` | `text` (default) or `json` |
+| `--version` | Print version, commit and build date, then exit |
+
+The daemon listens on port **3000** on all interfaces, with no authentication. Keep it on a trusted network.
+
+At startup the config is validated; every problem is printed and the daemon exits if anything is wrong. A missing SSH key is only a warning (booting doesn't need it, shutting down does).
+
+> **Check the sentinel before (re)starting.** If the sentinel doesn't answer when the daemon starts, it goes straight to `OutageConfirmed` and shuts down every running managed node about 30 seconds later.
 
 ---
 
-## Quickstart
+## The dashboard
 
-Once the daemon is running, everything goes through the `homelabctl` CLI:
+Open `http://<host>:3000/ui/`. It refreshes itself every 5 seconds.
 
-```bash
-$ homelabctl status
-```
+- **Header:** daemon version (hover for commit and build date) and when the page last synced.
+- **Sentinel card:** `mains: up` / `down` / …, last seen, and whether boots are allowed.
+- **Summary line:** node counts, **refresh** (re-ping every node now), **shut down all**.
+- **Profiles card:** see [Profiles](#profiles).
+- **Node cards:** see [Nodes](#nodes).
+- **Services:** see [Services](#services).
+- **Event history** (sidebar on wide screens, top on phones): the result of every action you take, with an `OK`/`ERR` tag and HTTP code. It's stored in your browser, so each device has its own history.
 
-<!-- GIF: `homelabctl status` output, showing current profile, node states, sentinel state -->
-![status-demo](./docs/gifs/status.gif)
-
-```
-Profile:   movie (active since 12:30, next: off @ 23:00)
-Sentinel:  normal (falcon-lite reachable)
-Override:  none
-
-NODE          STATE   ADDRESS         LAST SEEN
-falcon-heavy  on      192.168.1.20    2s ago
-falcon1       off     192.168.1.21    -
-falcon2       on      192.168.1.22    4s ago
-```
+Times show as `2:33pm (12m ago)`; hover for the exact time.
 
 ---
 
-## Checking status
+## Nodes
 
-```bash
-# Full daemon + fleet snapshot
-homelabctl status
+Each node card shows its state (`on`, `off`, `booting`, `shutting`, `unknown`), address, when it last answered a ping, and **Boot** / **Shut down** buttons.
 
-# Include recent event history inline
-homelabctl status --history
-```
-
----
-
-## Managing nodes
-
-```bash
-# List all configured nodes and their current state
-homelabctl nodes list
-```
-
-<!-- GIF: `homelabctl nodes list` scrolling through node table -->
-![nodes-list-demo](./docs/gifs/nodes-list.gif)
-
-```
-NAME          ADDRESS         STATE   SERVICES
-falcon-heavy  192.168.1.20    on      jellyfin, immich, truenas
-falcon1       192.168.1.21    off     proxmox-backup, borg
-falcon2       192.168.1.22    on      transmission, navidrome, slskd
-```
-
-```bash
-# Inspect a single node in detail
-homelabctl nodes show falcon-heavy
-
-# Manually boot or shut down a single node, outside of any profile
-homelabctl boot falcon1
-homelabctl shutdown falcon1
-```
-
-> Manual single-node boot/shutdown doesn't change the active profile or override — it's a direct, out-of-band action. The next scheduler tick or override change will reconcile the fleet back to whatever *should* be running.
+- **Boot** sends Wake-on-LAN. The node shows `booting`, then after `wait_after_boot` seconds it's pinged and shows `on` (or `off` if it didn't come up).
+- **Shut down** asks for confirmation, then runs `shutdown now` over SSH. The node shows `shutting`, then `off` after `wait_after_shutdown` seconds.
+- Both re-ping the node first, so a stale state on the card doesn't block them. Boot is greyed out for a node that's `on`, Shut down for one that's `off`, and both while it's booting or shutting down.
+- **Unmanaged** nodes (marked with an `unmanaged` chip) work the same, but no automation touches them.
+- **refresh** re-pings every node immediately; the daemon also does this every 15 minutes by itself.
+- **shut down all** shuts down every managed node (unmanaged ones are skipped) and reports each node's result.
 
 ---
 
-## Working with profiles
+## Profiles
 
-```bash
-# List all configured profiles
-homelabctl profile list
-```
+The profiles card has one button per profile. Hover or click to see exactly what it does, e.g. *"Boot falcon-heavy, falcon2 and shut down falcon1?"*.
 
-```
-NAME     NODES
-backup   falcon1
-movie    falcon-heavy, falcon2
-off      (none)
-```
+Applying a profile boots its nodes in order, then shuts down every other managed node. Each node's result is shown on the card and in the event history:
 
-```bash
-# Show the boot order for a specific profile
-homelabctl profile show movie
-```
+| Result | Meaning |
+|---|---|
+| `booting` | Wake-on-LAN sent |
+| `shutting` | shutdown sent |
+| `skipped` | nothing to do (already on/off, or mid-transition); hover for the reason |
+| `failed` | the boot or shutdown failed; hover for the error |
 
-```
-Profile: movie
-Boot order:     falcon-heavy → falcon2
-Shutdown order: falcon2 → falcon-heavy
-```
+**Auto-off.** When you apply a profile by hand, the nodes it actually booted are shut down again **one hour later** (in reverse order). The card shows *"auto-off 3:45pm (in 59m) · shuts down …"*. Applying any other profile, by hand or on schedule, cancels the pending auto-off. Scheduled applies never start one.
+
+Profile buttons are disabled while the sentinel isn't `Normal`.
 
 ---
 
-## Manual overrides
+## The schedule
 
-<!-- GIF: setting an override, watching `status` reflect it, then clearing it -->
-![override-demo](./docs/gifs/override.gif)
+The profiles card shows the next scheduled profile (*"next movie at 12:00 (in 2h 5m)"*) and the last scheduled run. A scheduled apply refused because of an outage shows as *refused*; it is not retried, and the next entry runs as usual.
 
-```bash
-# Jump to the movie profile for 2 hours, then hand back to the schedule
-homelabctl override movie --for 2h
-
-# Jump to backup mode indefinitely (won't auto-expire)
-homelabctl override backup --indefinite
-
-# Default override duration (1h, per config) if no flag is given
-homelabctl override movie
-
-# Clear an active override early — reconciles immediately to the
-# profile the schedule says should currently be active
-homelabctl override clear
-```
-
-```
-$ homelabctl override movie --for 2h
-✓ Override set: movie (expires 14:45, in 2h)
-
-$ homelabctl status
-Profile:   movie (override, expires 14:45)
-Sentinel:  normal
-Override:  movie → expires in 1h 58m
-```
+The schedule only acts at its entry times. Missed entries aren't replayed and nothing is applied when the daemon starts.
 
 ---
 
-## Viewing the schedule
+## Services
 
-```bash
-homelabctl schedule show
-```
+Services from the config appear as tiles, grouped by `group`. Each tile links to the service and shows a health indicator, updated every minute:
 
-```
-Timezone: Asia/Kolkata
+| Indicator | Meaning |
+|---|---|
+| ● **up** | answered an HTTP request (any status below 500, including logins and redirects) |
+| ● **down** | no answer, and its node is on or not set: a real problem |
+| ○ **asleep** | no answer, but its `node` is off, so expected |
+| ◌ **unchecked** | no check has finished yet |
 
-TIME    PROFILE
-09:00   backup
-12:30   movie
-23:00   off
-
-Next transition: 23:00 → off (in 6h 12m)
-```
+Hover for when it was last checked. Set `node:` on a service so a planned shutdown shows as asleep rather than down.
 
 ---
 
-## Event history
+## During a power outage
 
-```bash
-# Last 20 events (boots, shutdowns, override changes, sentinel transitions)
-homelabctl events
+When the sentinel stops answering:
 
-# Limit output
-homelabctl events --limit 5
-```
+1. `mains: flickering?` (`OutageDetected`): boots and profile applies are refused immediately.
+2. After `outage_grace_period`: `mains: down` (`OutageConfirmed`), and every managed node is shut down.
+3. When the sentinel answers again: `mains: coming back` (`Restoring`). After `restore_grace_period` it's back to `Normal` and boots are allowed again.
 
-```
-TIME      TYPE               DETAIL
-12:30:01  profile_applied    backup → movie
-12:30:02  node_boot          falcon-heavy
-12:33:02  node_boot          falcon2
-09:00:00  profile_applied    off → backup
-```
+Nodes are not booted automatically after power returns yet: apply a profile, or wait for the next schedule entry.
 
 ---
 
-## JSON output for scripting
+## JSON API
 
-Every command supports `--json` for machine-readable output — useful for dashboards, cron jobs, or feeding into other tools:
+Every route returns JSON. Errors return a 4xx/5xx status and `{"status": false, "message": "…"}`.
+
+| Method | Route | Does |
+|---|---|---|
+| `GET` | `/health` | `Hi!` if the daemon is up |
+| `GET` | `/status` | sentinel state and all nodes |
+| `GET` | `/nodes` | all nodes |
+| `GET` | `/nodes/{name}` | one node, with MAC and boot timeout |
+| `POST` | `/nodes/{name}/boot` | boot a node |
+| `POST` | `/nodes/{name}/shutdown` | shut down a node |
+| `POST` | `/nodes/refresh` | re-ping every node |
+| `POST` | `/nodes/shutdown-all` | shut down every managed node; per-node results |
+| `GET` | `/profiles` | profiles (with `nodes` and `shuts_down`), last applied, auto-off |
+| `GET` | `/profiles/{name}` | one profile |
+| `POST` | `/profiles/{name}/apply` | apply a profile; per-node results |
+| `GET` | `/schedule` | entries, next run, last run |
+| `GET` | `/services` | services and their latest check |
+
+| Status | Meaning |
+|---|---|
+| 404 | unknown node or profile |
+| 409 | refused: node already in that state, mid-transition, or sentinel not `Normal` |
+| 502 | the boot or shutdown itself failed (WoL, SSH) |
 
 ```bash
-homelabctl status --json | jq '.sentinel.state'
-homelabctl nodes list --json | jq '.[] | select(.state=="on") | .name'
+curl -s localhost:3000/status | jq '.sentinel.state'
+curl -s localhost:3000/schedule | jq '.next'
+curl -s -X POST localhost:3000/profiles/movie/apply | jq '.nodes'
 ```
 
 ```json
 {
   "profile": "movie",
-  "sentinel": { "state": "normal", "last_seen": "2026-09-08T12:34:56+05:30" },
-  "override": null,
+  "trigger": "manual",
+  "applied_at": "2026-10-23T12:00:00+05:30",
   "nodes": [
-    { "name": "falcon-heavy", "state": "on", "address": "192.168.1.20" },
-    { "name": "falcon1", "state": "off", "address": "192.168.1.21" },
-    { "name": "falcon2", "state": "on", "address": "192.168.1.22" }
+    { "node": "falcon-heavy", "result": "booting" },
+    { "node": "falcon2", "result": "skipped", "message": "node online, no need of boot; node: falcon2; conflict" },
+    { "node": "falcon1", "result": "shutting" }
   ]
 }
 ```
 
 ---
 
-## Global flags
+## Configuration
 
-| Flag | Description |
+A complete example with comments is in [`deploy/config/config.example.yaml`](./deploy/config/config.example.yaml). All durations are in seconds.
+
+| Section | Keys |
 |---|---|
-| `--config <path>` | Path to config file (default: `/etc/homelabctl/config.yaml`) |
-| `--api-addr <addr>` | Override the daemon API address (default: `127.0.0.1:PORT` from config) |
-| `--json` | Emit machine-readable JSON instead of a formatted table |
+| `ssh` | `user`, `identity_file` (absolute path), `port`, `connection_timeout`, `strict_host_key_checking`, `known_hosts_file` |
+| `sentinel` | `host`, `address`, `check_interval`, `outage_grace_period`, `restore_grace_period` |
+| `nodes.<name>` | `address`, `mac`, `wait_after_boot`, `wait_after_shutdown`, `unmanaged` |
+| `services[]` | `name`, `description`, `url` (http/https), `icon`, `group`, `node` |
+| `profiles.<name>` | `nodes` (boot order) |
+| `schedule.entries[]` | `time` (`HH:MM`, local time), `profile` |
 
+Validation rules, checked at startup:
 
+- `ssh`: a user, a port between 1 and 65535, an identity file or password, and `known_hosts_file` when strict checking is on.
+- `sentinel`: a host and valid address, positive interval and grace periods, and not also listed as a node (by name or address).
+- Nodes: a valid IP or hostname, a valid MAC, no duplicate addresses or MACs, and wait times above zero.
+- Services: unique names, http(s) URLs, and a known `node` if set.
+- Profiles: only known, managed nodes, each listed once.
+- Schedule: valid, unique times that name existing profiles.
+
+Host key checking isn't enforced yet: the daemon accepts any SSH host key, whatever `strict_host_key_checking` says.

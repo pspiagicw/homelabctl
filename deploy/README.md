@@ -39,14 +39,23 @@ targets use `BatchMode=yes`, so they fail instead of prompting. Override with
    echo 'net.ipv4.ping_group_range = 0 2147483647' | sudo tee /etc/sysctl.d/99-homelabctl-ping.conf
    sudo sysctl --system
    ```
-4. From the laptop, push the config and the binary:
+4. SSH key for shutting nodes down: create it on the Pi, without a passphrase
+   (the daemon can't type one), and authorise it on every managed node:
+   ```sh
+   mkdir -p ~/.config/homelabctl/keys && chmod 700 ~/.config/homelabctl/keys
+   ssh-keygen -t ed25519 -N "" -C "homelabctld@falcon-control" \
+     -f ~/.config/homelabctl/keys/id_ed25519
+   # append ~/.config/homelabctl/keys/id_ed25519.pub to root's
+   # ~/.ssh/authorized_keys on each managed node
+   ```
+   Without it, Boot (Wake-on-LAN) works but every shutdown fails: the Shut
+   down button, profile switching, the auto-off, and the outage shutdown.
+   `identity_file` in the config must be the absolute path (`~` isn't expanded).
+5. From the laptop, push the config and the binary:
    ```sh
    make deploy-config
    make deploy
    ```
-5. SSH key (later): put the private key at `~/.config/homelabctl/keys/id_ed25519`
-   (mode 0600) and its public key in root's `authorized_keys` on every node.
-   Until then Boot (Wake-on-LAN) works, but Shut down fails with an SSH error.
 
 ## Every release
 
@@ -61,12 +70,36 @@ make deploy-config
 ssh falcon-control systemctl --user restart homelabctld
 ```
 
+The config is validated at startup. If it's invalid, the service exits and
+every problem is in the journal (see below); fix `deploy/config.yaml` and push
+it again.
+
 Check on it:
 
 ```sh
 ssh falcon-control systemctl --user status homelabctld
 ssh falcon-control journalctl --user-unit homelabctld -f
+ssh falcon-control '~/.local/bin/homelabctld --version'
 ```
+
+The dashboard is at `http://falcon-control:3000/ui/`. Its header shows the
+running version.
+
+## The schedule is live
+
+Once deployed, the daemon applies the `schedule:` entries every day: profiles
+boot their nodes and shut down the others. To test a build on another machine
+without fighting the Pi, point its config's sentinel at `127.0.0.1` and don't
+leave it running across a schedule entry: two daemons would both apply
+profiles.
+
+## Docker services on the Pi
+
+Containers on a Docker **macvlan** network get their own LAN IPs, but Linux
+blocks traffic between a macvlan parent and its children, so the Pi itself
+can't reach them. Their service tiles will always show **down**. Either don't
+list them, use the host or bridge network, or add a macvlan "shim" interface
+on the Pi.
 
 ## Warning: check the sentinel before restarting
 
